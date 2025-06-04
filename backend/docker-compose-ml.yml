@@ -1,0 +1,233 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # API Backend (FastAPI) - Service principal
+  # ============================================================================
+  api-backend:
+    build: 
+      context: ./
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - ./shared:/app/shared
+    networks:
+      - ma_intelligence_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # ML Service - Calcul des scores
+  # ============================================================================
+  ml-service:
+    build:
+      context: ./
+      dockerfile: Dockerfile.ml
+    environment:
+      - ENVIRONMENT=production
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - ML_BATCH_SIZE=1000
+      - ML_MODEL_PATH=/app/models
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+    volumes:
+      - ./ml-service:/app/ml-service
+      - ./shared:/app/shared
+      - ml_models:/app/models
+      - ml_features:/app/features
+    networks:
+      - ma_intelligence_network
+    restart: unless-stopped
+
+  # ============================================================================
+  # Scheduler (Celery) - Orchestration des tâches
+  # ============================================================================
+  scheduler:
+    build:
+      context: ./
+      dockerfile: Dockerfile.scheduler
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+    depends_on:
+      - redis
+      - ml-service
+    volumes:
+      - ./scheduler:/app/scheduler
+      - ./shared:/app/shared
+    networks:
+      - ma_intelligence_network
+    restart: unless-stopped
+
+  # ============================================================================
+  # Celery Worker - Exécution des tâches
+  # ============================================================================
+  celery-worker:
+    build:
+      context: ./
+      dockerfile: Dockerfile.scheduler
+    command: celery -A celery_app worker --loglevel=info --queues=ml_scoring,ml_training,data_quality
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+    depends_on:
+      - redis
+      - ml-service
+    volumes:
+      - ./scheduler:/app/scheduler
+      - ./shared:/app/shared
+      - ./ml-service:/app/ml-service
+    networks:
+      - ma_intelligence_network
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+  # ============================================================================
+  # Celery Beat - Planificateur de tâches
+  # ============================================================================
+  celery-beat:
+    build:
+      context: ./
+      dockerfile: Dockerfile.scheduler
+    command: celery -A celery_app beat --loglevel=info
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - ./scheduler:/app/scheduler
+      - ./shared:/app/shared
+    networks:
+      - ma_intelligence_network
+    restart: unless-stopped
+
+  # ============================================================================
+  # Redis - Cache et broker de messages
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ma_intelligence_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # Monitoring (Optionnel) - Flower pour Celery
+  # ============================================================================
+  flower:
+    build:
+      context: ./
+      dockerfile: Dockerfile.scheduler
+    command: celery -A celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    networks:
+      - ma_intelligence_network
+    restart: unless-stopped
+
+  # ============================================================================
+  # MLflow Server (Optionnel) - Model Registry
+  # ============================================================================
+  mlflow:
+    image: python:3.10-slim
+    command: >
+      bash -c "pip install mlflow psycopg2-binary &&
+               mlflow server --host 0.0.0.0 --port 5000 
+               --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+               --default-artifact-root /mlflow/artifacts"
+    ports:
+      - "5000:5000"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    networks:
+      - ma_intelligence_network
+    restart: unless-stopped
+
+# ============================================================================
+# Volumes persistants
+# ============================================================================
+volumes:
+  redis_data:
+    driver: local
+  ml_models:
+    driver: local
+  ml_features:
+    driver: local
+  mlflow_artifacts:
+    driver: local
+
+# ============================================================================
+# Réseau
+# ============================================================================
+networks:
+  ma_intelligence_network:
+    driver: bridge
+
+# ============================================================================
+# Configuration pour différents environnements
+# ============================================================================
+
+# Profil de développement
+x-development: &development
+  profiles: ["dev"]
+  environment:
+    - ENVIRONMENT=development
+    - DEBUG=true
+
+# Profil de production
+x-production: &production
+  profiles: ["prod"]
+  environment:
+    - ENVIRONMENT=production
+    - DEBUG=false
+  deploy:
+    resources:
+      limits:
+        memory: 1G
+        cpus: '0.5'
+      reservations:
+        memory: 512M
+        cpus: '0.25'

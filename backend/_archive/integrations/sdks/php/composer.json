@@ -1,0 +1,65 @@
+{
+    "name": "ma-intelligence/sdk",
+    "description": "SDK PHP officiel pour l'API M&A Intelligence Platform",
+    "type": "library",
+    "license": "MIT",
+    "version": "1.0.0",
+    "authors": [
+        {
+            "name": "M&A Intelligence Team",
+            "email": "sdk@ma-intelligence.com"
+        }
+    ],
+    "keywords": [
+        "ma-intelligence",
+        "api",
+        "sdk",
+        "php",
+        "business",
+        "companies",
+        "scraping"
+    ],
+    "homepage": "https://docs.ma-intelligence.com/sdk/php",
+    "support": {
+        "docs": "https://docs.ma-intelligence.com/sdk/php",
+        "issues": "https://github.com/ma-intelligence/php-sdk/issues",
+        "source": "https://github.com/ma-intelligence/php-sdk"
+    },
+    "require": {
+        "php": ">=7.4",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "guzzlehttp/guzzle": "^7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0",
+        "squizlabs/php_codesniffer": "^3.6",
+        "phpstan/phpstan": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "MAIntelligence\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "MAIntelligence\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "cs-check": "phpcs",
+        "cs-fix": "phpcbf",
+        "phpstan": "phpstan analyse",
+        "ci": [
+            "@cs-check",
+            "@phpstan",
+            "@test"
+        ]
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

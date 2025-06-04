@@ -1,0 +1,502 @@
+{
+  "name": "ML Scoring Orchestrator - M&A Intelligence",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "cronExpression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-daily-scoring",
+      "name": "Daily Scoring Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [140, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trigger-scoring",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-manual-trigger", 
+      "name": "Manual Trigger Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [140, 500]
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/project/backend && python scoring.py --log-level INFO"
+      },
+      "id": "execute-scoring",
+      "name": "Execute ML Scoring",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$node[\"Execute ML Scoring\"].json[\"exitCode\"]}}",
+              "operation": "equal",
+              "value2": "0"
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "Check Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "✅ ML Scoring terminé avec succès"
+            },
+            {
+              "name": "attachments",
+              "value": "=[{\"color\": \"good\", \"fields\": [{\"title\": \"Timestamp\", \"value\": \"{{DateTime.now().toFormat('yyyy-MM-dd HH:mm:ss')}}\", \"short\": true}, {\"title\": \"Statut\", \"value\": \"SUCCESS\", \"short\": true}, {\"title\": \"Output\", \"value\": \"{{$node['Execute ML Scoring'].json['stdout']}}\", \"short\": false}]}]"
+            }
+          ]
+        }
+      },
+      "id": "notify-success",
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [800, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type", 
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "🚨 ML Scoring a échoué"
+            },
+            {
+              "name": "attachments",
+              "value": "=[{\"color\": \"danger\", \"fields\": [{\"title\": \"Timestamp\", \"value\": \"{{DateTime.now().toFormat('yyyy-MM-dd HH:mm:ss')}}\", \"short\": true}, {\"title\": \"Statut\", \"value\": \"ERROR\", \"short\": true}, {\"title\": \"Erreur\", \"value\": \"{{$node['Execute ML Scoring'].json['stderr']}}\", \"short\": false}]}]"
+            }
+          ]
+        }
+      },
+      "id": "notify-error",
+      "name": "Notify Error", 
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{$parameter[\"supabase_url\"]}}/rest/v1/ml_scores",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$parameter[\"supabase_key\"]}}"
+            },
+            {
+              "name": "apikey",
+              "value": "{{$parameter[\"supabase_key\"]}}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "count"
+            },
+            {
+              "name": "calculated_at",
+              "value": "gte.{{DateTime.now().minus({hours: 24}).toISO()}}"
+            }
+          ]
+        }
+      },
+      "id": "check-recent-scores",
+      "name": "Check Recent Scores",
+      "type": "n8n-nodes-base.httpRequest", 
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "to": "admin@yourcompany.com",
+        "subject": "ML Scoring - Rapport quotidien",
+        "text": "=Bonjour,\n\nLe scoring ML quotidien s'est exécuté avec succès.\n\n📊 Statistiques:\n- Timestamp: {{DateTime.now().toFormat('yyyy-MM-dd HH:mm:ss')}}\n- Scores calculés dernières 24h: {{$node['Check Recent Scores'].json[0]['count']}}\n- Statut: {{$node['Check Success'].json ? 'SUCCESS' : 'ERROR'}}\n\n🔗 Logs complets disponibles sur le serveur.\n\nCordialement,\nSystème M&A Intelligence"
+      },
+      "id": "send-report-email",
+      "name": "Send Report Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression", 
+              "cronExpression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-health-check",
+      "name": "Daily Health Check",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [140, 700]
+    },
+    {
+      "parameters": {
+        "url": "={{$parameter[\"supabase_url\"]}}/rest/v1/ml_scores",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$parameter[\"supabase_key\"]}}"
+            },
+            {
+              "name": "apikey", 
+              "value": "{{$parameter[\"supabase_key\"]}}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "calculated_at"
+            },
+            {
+              "name": "order", 
+              "value": "calculated_at.desc"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "id": "get-last-score",
+      "name": "Get Last Score Date",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [400, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "dateTime": [
+            {
+              "value1": "={{$node['Get Last Score Date'].json[0]['calculated_at']}}",
+              "operation": "before",
+              "value2": "={{DateTime.now().minus({hours: 48}).toISO()}}"
+            }
+          ]
+        }
+      },
+      "id": "check-last-score-date",
+      "name": "Check Last Score Date", 
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [600, 700]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "⚠️ ALERTE: Aucun scoring ML depuis plus de 48h"
+            },
+            {
+              "name": "attachments",
+              "value": "=[{\"color\": \"warning\", \"fields\": [{\"title\": \"Dernier scoring\", \"value\": \"{{$node['Get Last Score Date'].json[0]['calculated_at']}}\", \"short\": true}, {\"title\": \"Action requise\", \"value\": \"Vérifier le système de scoring\", \"short\": false}]}]"
+            }
+          ]
+        }
+      },
+      "id": "alert-no-recent-scores",
+      "name": "Alert No Recent Scores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [800, 800]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "cronExpression": "0 1 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "cron-weekly-retrain",
+      "name": "Weekly Retrain Trigger",
+      "type": "n8n-nodes-base.cron", 
+      "typeVersion": 1,
+      "position": [140, 1000]
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/project/backend && python scoring.py --force-retrain --log-level INFO"
+      },
+      "id": "execute-retrain",
+      "name": "Execute Model Retrain",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [400, 1000]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text", 
+              "value": "🧠 Ré-entraînement hebdomadaire des modèles terminé"
+            },
+            {
+              "name": "attachments",
+              "value": "=[{\"color\": \"good\", \"fields\": [{\"title\": \"Timestamp\", \"value\": \"{{DateTime.now().toFormat('yyyy-MM-dd HH:mm:ss')}}\", \"short\": true}, {\"title\": \"Statut\", \"value\": \"{{$node['Execute Model Retrain'].json['exitCode'] === 0 ? 'SUCCESS' : 'ERROR'}}\", \"short\": true}]}]"
+            }
+          ]
+        }
+      },
+      "id": "notify-retrain-complete",
+      "name": "Notify Retrain Complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [600, 1000]
+    },
+    {
+      "parameters": {
+        "responseMode": "lastNode"
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1000, 500]
+    }
+  ],
+  "connections": {
+    "Daily Scoring Trigger": {
+      "main": [
+        [
+          {
+            "node": "Execute ML Scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger Webhook": {
+      "main": [
+        [
+          {
+            "node": "Execute ML Scoring", 
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute ML Scoring": {
+      "main": [
+        [
+          {
+            "node": "Check Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Success": {
+      "main": [
+        [
+          {
+            "node": "Notify Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Success": {
+      "main": [
+        [
+          {
+            "node": "Check Recent Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Recent Scores": {
+      "main": [
+        [
+          {
+            "node": "Send Report Email",
+            "type": "main", 
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Health Check": {
+      "main": [
+        [
+          {
+            "node": "Get Last Score Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Score Date": {
+      "main": [
+        [
+          {
+            "node": "Check Last Score Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Last Score Date": {
+      "main": [
+        [
+          {
+            "node": "Alert No Recent Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Retrain Trigger": {
+      "main": [
+        [
+          {
+            "node": "Execute Model Retrain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Model Retrain": {
+      "main": [
+        [
+          {
+            "node": "Notify Retrain Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute ML Scoring": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "parameters": {
+      "supabase_url": "https://your-project.supabase.co",
+      "supabase_key": "your-supabase-anon-key"
+    }
+  },
+  "staticData": null,
+  "tags": ["ml", "scoring", "automation"],
+  "triggerCount": 0,
+  "updatedAt": "2024-12-31T12:00:00.000Z",
+  "versionId": "1"
+}

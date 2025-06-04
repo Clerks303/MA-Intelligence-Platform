@@ -1,0 +1,94 @@
+# ML Service Requirements - M&A Intelligence Platform
+# Machine Learning, Data Science, Feature Engineering uniquement
+# Python 3.10+ Compatible
+
+# === CORE ML FRAMEWORKS ===
+lightgbm>=4.6.0
+xgboost>=2.0.0,<2.1.0
+catboost>=1.2.0,<1.3.0
+scikit-learn>=1.3.0,<1.4.0
+
+# === DATA PROCESSING ===
+pandas>=2.1.0,<2.2.0
+numpy>=1.24.0,<1.27.0
+scipy>=1.11.0,<1.12.0
+
+# === FEATURE ENGINEERING ===
+feature-engine>=1.6.0,<1.7.0
+category-encoders>=2.6.0,<2.7.0
+imbalanced-learn>=0.11.0,<0.12.0
+
+# === MODEL MANAGEMENT & TRACKING ===
+mlflow>=2.8.0,<2.9.0
+joblib>=1.3.0,<1.4.0
+#pickle5>=0.0.12
+
+# === HYPERPARAMETER OPTIMIZATION ===
+optuna>=3.5.0,<3.6.0
+hyperopt>=0.2.7
+scikit-optimize>=0.9.0
+
+# === MODEL INTERPRETATION & EXPLAINABILITY ===
+shap>=0.44.0,<0.45.0
+lime>=0.2.0,<0.3.0
+eli5>=0.13.0,<0.14.0
+
+# === TIME SERIES ANALYSIS ===
+prophet>=1.1.0,<1.2.0
+statsmodels>=0.14.0,<0.15.0
+pmdarima>=2.0.0,<2.1.0
+
+# === DEEP LEARNING (Optionnel) ===
+tensorflow>=2.13.0,<2.16.0
+torch>=2.1.0,<2.2.0
+torchvision>=0.16.0,<0.17.0
+keras>=2.13.0,<2.16.0
+
+# === NATURAL LANGUAGE PROCESSING ===
+transformers>=4.30.0,<4.40.0
+sentence-transformers>=2.2.0,<2.3.0
+huggingface-hub>=0.19.0,<0.20.0
+spacy>=3.7.0,<3.8.0
+nltk>=3.8.0,<3.9.0
+textblob>=0.17.0,<0.18.0
+langdetect>=1.0.9
+wordcloud>=1.9.0,<2.0.0
+
+# === ADVANCED DATA PROCESSING ===
+networkx>=3.2.0,<3.3.0
+fuzzywuzzy>=0.18.0
+python-levenshtein>=0.23.0
+jellyfish>=1.0.0,<1.1.0
+
+# === VISUALIZATION (ML Specific) ===
+matplotlib>=3.8.0,<3.9.0
+seaborn>=0.13.0,<0.14.0
+plotly>=5.17.0,<5.18.0
+
+# === MODEL SERIALIZATION & DEPLOYMENT ===
+onnx>=1.15.0,<1.16.0
+onnxruntime>=1.16.0,<1.17.0
+
+# === PERFORMANCE & CACHING ===
+diskcache>=5.6.0,<5.7.0
+memory-profiler>=0.61.0
+psutil>=5.9.6
+
+# === DATABASE ACCESS (Light) ===
+sqlalchemy>=2.0.23,<2.1.0
+psycopg2-binary>=2.9.9,<2.10.0
+
+# === CONFIGURATION & UTILITIES ===
+pydantic>=2.4.0,<2.5.0
+python-dotenv>=1.0.0
+click>=8.1.7
+tqdm>=4.66.0
+
+# === LOGGING & MONITORING ===
+structlog>=23.2.0,<24.0.0
+prometheus-client>=0.19.0,<0.20.0
+
+# === DEVELOPMENT & TESTING ===
+pytest>=7.4.0,<8.0.0
+pytest-cov>=4.1.0,<5.0.0
+black>=23.11.0,<24.0.0

@@ -47,7 +47,7 @@ COLUMN_MAPPING = {
     'president': 'dirigeant_principal'
 }
 
-async def process_csv_file(file: UploadFile, db_client, update_existing: bool = False) -> Dict:
+async def process_csv_file(file: UploadFile, db_session, update_existing: bool = False) -> Dict:
     """Traite un fichier CSV et importe les données"""
     try:
         # Lire le CSV
@@ -71,11 +71,25 @@ async def process_csv_file(file: UploadFile, db_client, update_existing: bool = 
         # Appliquer le mapping
         df.rename(columns=COLUMN_MAPPING, inplace=True)
         
-        # Récupérer les SIREN existants
-        existing_response = db_client.table('cabinets_comptables').select('siren').execute()
-        existing_sirens = set(str(company['siren']) for company in existing_response.data)
+        # Récupérer les SIREN existants 
+        from app.models.company import Company as CompanyModel
         
-        # Préparer les données
+        # Vérifier que le modèle est bien chargé
+        logger.info(f"CompanyModel table: {CompanyModel.__tablename__}")
+        
+        try:
+            existing_companies = db_session.query(CompanyModel.siren).all()
+            existing_sirens_companies = set(str(company.siren) for company in existing_companies)
+            logger.info(f"Found {len(existing_sirens_companies)} existing companies")
+        except Exception as e:
+            logger.error(f"Error querying companies: {e}")
+            existing_sirens_companies = set()
+        
+        # Le modèle Company gère toutes les données d'entreprise
+        existing_sirens_entreprises = existing_sirens_companies  # Alias pour compatibilité
+        logger.info(f"Found {len(existing_sirens_entreprises)} existing companies")
+        
+        # Préparer les données (modèle Company unifié)
         companies_to_insert = []
         companies_to_update = []
         skipped = 0
@@ -102,8 +116,8 @@ async def process_csv_file(file: UploadFile, db_client, update_existing: bool = 
             if 'statut' not in company_data:
                 company_data['statut'] = 'à contacter'
             
-            # Répartir entre insert et update
-            if siren in existing_sirens:
+            # Traitement modèle Company unifié
+            if siren in existing_sirens_companies:
                 if update_existing:
                     companies_to_update.append(company_data)
                 else:
@@ -111,46 +125,73 @@ async def process_csv_file(file: UploadFile, db_client, update_existing: bool = 
             else:
                 companies_to_insert.append(company_data)
         
-        # Insérer les nouvelles entreprises
+        # Insertion des nouvelles entreprises
         inserted_count = 0
         if companies_to_insert:
-            # Insertion par batch de 50
             for i in range(0, len(companies_to_insert), 50):
                 batch = companies_to_insert[i:i+50]
                 try:
-                    db_client.table('cabinets_comptables').insert(batch).execute()
+                    for company_data in batch:
+                        new_company = CompanyModel(**company_data)
+                        db_session.add(new_company)
+                    db_session.commit()
                     inserted_count += len(batch)
                     logger.info(f"Batch {i//50 + 1} inséré: {len(batch)} entreprises")
                 except Exception as e:
+                    db_session.rollback()
                     logger.error(f"Erreur insertion batch: {e}")
         
-        # Mettre à jour les entreprises existantes
         updated_count = 0
         if companies_to_update and update_existing:
             for company in companies_to_update:
                 try:
                     siren = company['siren']
                     update_data = {k: v for k, v in company.items() if k != 'siren'}
-                    db_client.table('cabinets_comptables').update(update_data).eq('siren', siren).execute()
-                    updated_count += 1
+                    existing_company = db_session.query(CompanyModel).filter(CompanyModel.siren == siren).first()
+                    if existing_company:
+                        for field, value in update_data.items():
+                            setattr(existing_company, field, value)
+                        db_session.commit()
+                        updated_count += 1
                 except Exception as e:
+                    db_session.rollback()
                     logger.error(f"Erreur mise à jour SIREN {siren}: {e}")
         
-        # Compter le total
-        total_response = db_client.table('cabinets_comptables').select('id', count='exact').execute()
+        # Calcul des statistiques (compatibilité avec l'ancienne API)
+        nouvelles_entreprises = inserted_count
+        entreprises_mises_a_jour = updated_count
+        entreprises_ignorees = skipped
+        
+        # Compter les totaux
+        try:
+            total_count = db_session.query(CompanyModel).count()
+        except Exception as e:
+            logger.error(f"Error counting companies: {e}")
+            total_count = 0
+            
+        # Count total (alias pour compatibilité)
+        total_count_entreprises = total_count
         
         return {
             'success': True,
-            'total_rows': total_response.count if hasattr(total_response, 'count') else len(existing_sirens) + inserted_count,
+            'total_rows': total_count,
             'new_companies': inserted_count,
             'updated_companies': updated_count,
             'skipped_companies': skipped,
-            'filename': file.filename
+            'filename': file.filename,
+            'entreprises': {
+                'total': total_count_entreprises,
+                'nouvelles': nouvelles_entreprises,
+                'mises_a_jour': entreprises_mises_a_jour,
+                'ignorees': entreprises_ignorees
+            }
         }
         
     except Exception as e:
         logger.error(f"Erreur traitement CSV: {e}")
         raise
+
+# Fonction supprimée - modèle Company unifié gère toutes les données
 
 def clean_company_data(data: Dict) -> Dict:
     """Nettoie et valide les données d'une entreprise"""
@@ -159,7 +200,7 @@ def clean_company_data(data: Dict) -> Dict:
     # Champs texte
     text_fields = [
         'siren', 'siret_siege', 'nom_entreprise', 'forme_juridique',
-        'adresse', 'email', 'telephone', 'numero_tva', 'code_naf',
+        'adresse', 'ville', 'code_postal', 'email', 'telephone', 'numero_tva', 'code_naf',
         'libelle_code_naf', 'dirigeant_principal', 'statut'
     ]
     
@@ -187,7 +228,7 @@ def clean_company_data(data: Dict) -> Dict:
             cleaned[field] = value
     
     # Ajouter les timestamps
-    cleaned['last_scraped_at'] = datetime.now().isoformat()
+    cleaned['last_scraped_at'] = datetime.now()
     
     return cleaned
 

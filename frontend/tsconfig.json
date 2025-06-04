@@ -1,0 +1,60 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "es6"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/components/*": ["./src/components/*"],
+      "@/lib/*": ["./src/lib/*"],
+      "@/hooks/*": ["./src/hooks/*"],
+      "@/stores/*": ["./src/stores/*"],
+      "@/types/*": ["./src/types/*"],
+      "@/services/*": ["./src/services/*"],
+      "@/features/*": ["./src/features/*"]
+    }
+  },
+  "include": [
+    "src/*.ts",
+    "src/*.tsx",
+    "src/components/ui/*.ts",
+    "src/components/ui/*.tsx",
+    "src/components/companies/*.tsx",
+    "src/components/dashboard/*.tsx",
+    "src/components/scraping/*.tsx",
+    "src/components/auth/*.tsx",
+    "src/components/Layout.js",
+    "src/pages/*.js",
+    "src/pages/*.tsx", 
+    "src/services/*.js",
+    "src/services/*.ts",
+    "src/contexts/*.js",
+    "src/lib/*.ts",
+    "src/lib/*.js",
+    "src/hooks/*.ts",
+    "src/stores/*.ts",
+    "src/types/*.ts",
+    "src/utils/*.js",
+    "src/utils/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

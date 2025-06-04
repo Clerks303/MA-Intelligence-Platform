@@ -1,0 +1,142 @@
+{
+  "timestamp": "2025-05-30T19:17:28.111088",
+  "us_story": "US-002: Cache Redis multi-niveaux",
+  "summary": {
+    "total_tests": 10,
+    "success_count": 4,
+    "failure_count": 6,
+    "success_rate": 40.0
+  },
+  "success_criteria_check": {
+    "hit_ratio": true,
+    "latency": true,
+    "cache_types": true
+  },
+  "detailed_results": {
+    "redis_connection": {
+      "status": "SUCCESS",
+      "details": {
+        "health_status": "healthy",
+        "ping_latency_ms": 0.17,
+        "redis_version": "8.0.2",
+        "memory_used_mb": 0.92,
+        "connected_clients": 1
+      },
+      "timestamp": "2025-05-30T19:17:25.649458"
+    },
+    "cache_module": {
+      "status": "FAILURE",
+      "error": "Validation échouée: {'validations': [('get_or_compute', True), ('compression', True), ('pattern_invalidation', False), ('metrics_collection', False)], 'metrics': {'hits': 3, 'misses': 1, 'sets': 7, 'deletes': 2, 'errors': 0, 'hit_ratio_percent': 75.0, 'average_latency_ms': 0.32, 'memory_usage_mb': 0.0, 'uptime_seconds': 0, 'operations_per_second': 11.0}}",
+      "timestamp": "2025-05-30T19:17:25.651640"
+    },
+    "cache_types_configuration": {
+      "status": "SUCCESS",
+      "details": {
+        "expected_types": 5,
+        "working_types": 5,
+        "working_types_list": [
+          "enrichment_pappers",
+          "enrichment_kaspr",
+          "scoring_ma",
+          "export_csv",
+          "api_external"
+        ],
+        "adaptive_ttl_working": true
+      },
+      "timestamp": "2025-05-30T19:17:25.660634"
+    },
+    "scrapers_cache_integration": {
+      "status": "FAILURE",
+      "error": "Validation échouée: {'validations': [('pappers_cache', False), ('kaspr_cache', False), ('batch_operations', False)], 'scrapers_tested': ['pappers', 'kaspr']}",
+      "timestamp": "2025-05-30T19:17:25.672829"
+    },
+    "scoring_cache": {
+      "status": "FAILURE",
+      "error": "'str' object has no attribute 'final_score'",
+      "timestamp": "2025-05-30T19:17:25.677300"
+    },
+    "monitoring_system": {
+      "status": "SUCCESS",
+      "details": {
+        "validations": [
+          [
+            "dashboard_data",
+            true
+          ],
+          [
+            "performance_report",
+            true
+          ],
+          [
+            "health_check",
+            true
+          ],
+          [
+            "alert_system",
+            true
+          ]
+        ],
+        "dashboard_status": "healthy",
+        "alert_thresholds_count": 8
+      },
+      "timestamp": "2025-05-30T19:17:25.687747"
+    },
+    "cache_performance": {
+      "status": "FAILURE",
+      "error": "Validation échouée: {'average_latency_ms': 0.4343748092651367, 'p95_latency_ms': 1.5381455421447754, 'latency_target_met': True, 'hit_ratio_percent': 66.67, 'hit_ratio_target_met': False, 'hits': 100, 'total_operations': 150, 'concurrent_operations_tested': 50, 'successful_operations': 50, 'total_time_seconds': 0.01, 'concurrency_target_met': True}",
+      "timestamp": "2025-05-30T19:17:25.732688"
+    },
+    "invalidation_mechanisms": {
+      "status": "FAILURE",
+      "error": "Validation échouée: {'validations': [('pattern_invalidation', False), ('cascade_invalidation', True), ('ttl_expiration', False)], 'pattern_deleted_count': 0, 'cascade_deleted_count': 0}",
+      "timestamp": "2025-05-30T19:17:27.737323"
+    },
+    "api_endpoints": {
+      "status": "SUCCESS",
+      "details": {
+        "validations": [
+          [
+            "status_endpoint",
+            true
+          ],
+          [
+            "dashboard_endpoint",
+            true
+          ],
+          [
+            "metrics_endpoint",
+            true
+          ],
+          [
+            "invalidation_endpoint",
+            true
+          ]
+        ],
+        "simulated_endpoints": [
+          "status",
+          "dashboard",
+          "metrics",
+          "invalidation"
+        ]
+      },
+      "timestamp": "2025-05-30T19:17:27.745271"
+    },
+    "environment_configuration": {
+      "status": "FAILURE",
+      "error": "Validation échouée: {'validations': [('environment_variables', False), ('configuration_files', True), ('docker_configuration', False)], 'env_vars_present': [], 'config_files_present': ['app/core/cache.py', 'app/core/cache_monitoring.py']}",
+      "timestamp": "2025-05-30T19:17:28.110680"
+    }
+  },
+  "benchmark_results": {
+    "throughput_ops_per_second": 7243.02,
+    "large_data_latency_ms": 3.22,
+    "large_data_integrity": true,
+    "hit_ratio_under_load": 80.0,
+    "benchmark_timestamp": "2025-05-30T19:17:28.110270"
+  },
+  "recommendations": [
+    "Corriger intégration cache dans scrapers",
+    "Debugger système de cache scoring"
+  ],
+  "status": "FAILED"
+}

@@ -23,7 +23,7 @@ import {
 import {
   Save,
   Key,
-  Database,
+  Storage,  // Remplace Database qui n'existe pas
   Notifications,
   Security,
   Delete,
@@ -31,7 +31,6 @@ import {
 } from '@mui/icons-material';
 import { useFormik } from 'formik';
 import * as yup from 'yup';
-import api from '../services/api';
 
 function TabPanel({ children, value, index, ...other }) {
   return (
@@ -50,7 +49,7 @@ function TabPanel({ children, value, index, ...other }) {
 export default function Settings() {
   const [tabValue, setTabValue] = useState(0);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [apiKeys, setApiKeys] = useState([
+  const [apiKeys] = useState([
     { id: 1, name: 'Pappers API', key: '••••••••••••••••', active: true },
     { id: 2, name: 'OpenAI API', key: '••••••••••••••••', active: false },
   ]);
@@ -117,7 +116,7 @@ export default function Settings() {
         <Tabs value={tabValue} onChange={handleTabChange}>
           <Tab label="Général" icon={<Settings />} iconPosition="start" />
           <Tab label="API & Intégrations" icon={<Key />} iconPosition="start" />
-          <Tab label="Base de données" icon={<Database />} iconPosition="start" />
+          <Tab label="Base de données" icon={<Storage />} iconPosition="start" />
           <Tab label="Notifications" icon={<Notifications />} iconPosition="start" />
           <Tab label="Sécurité" icon={<Security />} iconPosition="start" />
         </Tabs>

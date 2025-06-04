@@ -1,502 +1,438 @@
 import React, { useState } from 'react';
-import {
-  Box,
-  Paper,
-  Typography,
-  Grid,
-  Card,
-  CardContent,
-  CardActions,
-  Button,
-  LinearProgress,
-  Alert,
-  Chip,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  IconButton,
-  CircularProgress,
-  Divider
-} from '@mui/material';
-import {
-  CloudUpload,
-  Storage,
-  Language,
-  Description,
-  PlayArrow,
-  Stop,
-  CheckCircle,
-  Error,
-  Info,
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
+  Database,
   Upload,
-  Refresh
-} from '@mui/icons-material';
-import { useDropzone } from 'react-dropzone';
-import { useQuery, useMutation } from 'react-query';
-import axios from 'axios';
+  FileUp,
+  CheckCircle,
+  Settings,
+  Activity,
+  TrendingUp,
+  Download,
+  Info,
+  Play,
+  RefreshCcw,
+  Zap
+} from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
-
-function ScrapingSource({ source, onStart }) {
-  const [status, setStatus] = useState(null);
-  const [intervalId, setIntervalId] = useState(null);
-
-  React.useEffect(() => {
-    checkStatus();
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, []);
-
-  const checkStatus = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/scraping/status/${source.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setStatus(response.data);
-      
-      if (!response.data.is_running && intervalId) {
-        clearInterval(intervalId);
-        setIntervalId(null);
-      }
-    } catch (error) {
-      console.error('Error checking status:', error);
-    }
-  };
-
-  const handleStart = async () => {
-    await onStart();
-    const id = setInterval(checkStatus, 2000);
-    setIntervalId(id);
-    checkStatus();
-  };
-
-  const handleStop = () => {
-    if (intervalId) {
-      clearInterval(intervalId);
-      setIntervalId(null);
-    }
-  };
-
-  const getIcon = () => {
-    switch (source.id) {
-      case 'pappers':
-        return <Storage sx={{ fontSize: 40, color: 'primary.main' }} />;
-      case 'societe':
-        return <Language sx={{ fontSize: 40, color: 'secondary.main' }} />;
-      case 'infogreffe':
-        return <Description sx={{ fontSize: 40, color: 'success.main' }} />;
-      default:
-        return <Info sx={{ fontSize: 40 }} />;
-    }
-  };
-
-  const getStatusChip = () => {
-    if (!status) return null;
-    
-    if (status.is_running) {
-      return <Chip label="En cours" color="primary" size="small" />;
-    } else if (status.error) {
-      return <Chip label="Erreur" color="error" size="small" />;
-    } else if (status.progress === 100) {
-      return <Chip label="Terminé" color="success" size="small" />;
-    }
-    return <Chip label="Prêt" color="default" size="small" />;
-  };
-
-  return (
-    <Card sx={{ height: '100%', position: 'relative' }}>
-      <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-          <Box display="flex" alignItems="center" gap={2}>
-            {getIcon()}
-            <Box>
-              <Typography variant="h6">{source.name}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {source.description}
-              </Typography>
-            </Box>
-          </Box>
-          {getStatusChip()}
-        </Box>
-
-        {status && status.is_running && (
-          <Box sx={{ mt: 2 }}>
-            <Box display="flex" justifyContent="space-between" mb={1}>
-              <Typography variant="body2">{status.message}</Typography>
-              <Typography variant="body2">{status.progress}%</Typography>
-            </Box>
-            <LinearProgress variant="determinate" value={status.progress} />
-            {(status.new_companies > 0 || status.skipped_companies > 0) && (
-              <Box display="flex" gap={2} mt={1}>
-                <Typography variant="caption" color="success.main">
-                  +{status.new_companies} nouvelles
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {status.skipped_companies} ignorées
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        )}
-
-        {status && status.error && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            {status.error}
-          </Alert>
-        )}
-      </CardContent>
-
-      <CardActions>
-        {status && status.is_running ? (
-          <Button 
-            size="small" 
-            color="error" 
-            startIcon={<Stop />}
-            onClick={handleStop}
-            disabled
-          >
-            Arrêter
-          </Button>
-        ) : (
-          <Button 
-            size="small" 
-            color="primary" 
-            startIcon={<PlayArrow />}
-            onClick={handleStart}
-            disabled={status?.is_running}
-          >
-            Lancer
-          </Button>
-        )}
-        <Button 
-          size="small" 
-          startIcon={<Refresh />}
-          onClick={checkStatus}
-        >
-          Actualiser
-        </Button>
-      </CardActions>
-    </Card>
-  );
-}
-
-function UploadDialog({ open, onClose }) {
-  const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [updateExisting, setUpdateExisting] = useState(false);
-
-  const { getRootProps, getInputProps, acceptedFiles } = useDropzone({
-    accept: {
-      'text/csv': ['.csv']
-    },
-    maxFiles: 1
-  });
-
-  const handleUpload = async () => {
-    if (acceptedFiles.length === 0) return;
-
-    setUploading(true);
-    const formData = new FormData();
-    formData.append('file', acceptedFiles[0]);
-    formData.append('update_existing', updateExisting);
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${API_URL}/companies/upload`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-      setResult(response.data);
-    } catch (error) {
-      console.error('Upload error:', error);
-      setResult({ error: error.response?.data?.detail || 'Erreur upload' });
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleClose = () => {
-    setResult(null);
-    onClose();
-  };
-
-  return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Importer un fichier CSV</DialogTitle>
-      <DialogContent>
-        {!result ? (
-          <>
-            <Box
-              {...getRootProps()}
-              sx={{
-                border: '2px dashed',
-                borderColor: 'divider',
-                borderRadius: 2,
-                p: 3,
-                textAlign: 'center',
-                cursor: 'pointer',
-                mb: 2,
-                '&:hover': {
-                  borderColor: 'primary.main',
-                  bgcolor: 'action.hover'
-                }
-              }}
-            >
-              <input {...getInputProps()} />
-              <CloudUpload sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-              <Typography>
-                Glissez-déposez votre fichier CSV ici ou cliquez pour sélectionner
-              </Typography>
-            </Box>
-
-            {acceptedFiles.length > 0 && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Fichier sélectionné: {acceptedFiles[0].name}
-              </Alert>
-            )}
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={updateExisting}
-                  onChange={(e) => setUpdateExisting(e.target.checked)}
-                />
-              }
-              label="Mettre à jour les entreprises existantes"
-            />
-          </>
-        ) : (
-          <Box>
-            {result.error ? (
-              <Alert severity="error">{result.error}</Alert>
-            ) : (
-              <Alert severity="success">
-                <Typography variant="subtitle2" gutterBottom>
-                  Import terminé avec succès !
-                </Typography>
-                <List dense>
-                  <ListItem>
-                    <ListItemText 
-                      primary="Total lignes traitées"
-                      secondary={result.total_rows}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary="Nouvelles entreprises"
-                      secondary={result.new_companies}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary="Entreprises mises à jour"
-                      secondary={result.updated_companies}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary="Entreprises ignorées"
-                      secondary={result.skipped_companies}
-                    />
-                  </ListItem>
-                </List>
-              </Alert>
-            )}
-          </Box>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose}>Fermer</Button>
-        {!result && (
-          <Button 
-            variant="contained" 
-            onClick={handleUpload}
-            disabled={acceptedFiles.length === 0 || uploading}
-            startIcon={uploading ? <CircularProgress size={20} /> : <Upload />}
-          >
-            {uploading ? 'Upload en cours...' : 'Importer'}
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
-  );
-}
+import { ThemeToggle } from '../components/ui/theme-toggle';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { Card } from '../components/ui/card';
+import api from '../services/api';
 
 export default function Scraping() {
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const [dragActive, setDragActive] = useState(false);
   const [enrichmentParams, setEnrichmentParams] = useState({
-    min_ca: 10000000,
-    min_score: 70,
+    min_ca: 1000000,
+    min_score: 50,
     siren: ''
   });
 
-  const sources = [
-    {
-      id: 'pappers',
-      name: 'Pappers API',
-      description: 'Recherche via l\'API Pappers (quota: 1000/mois)'
+  // Upload file mutation
+  const uploadMutation = useMutation(
+    async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return api.post('/companies/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
     },
     {
-      id: 'societe',
-      name: 'Société.com',
-      description: 'Scraping du site Société.com'
-    },
-    {
-      id: 'infogreffe',
-      name: 'Infogreffe',
-      description: 'Enrichissement des données financières'
-    }
-  ];
-
-  const startScrapingMutation = useMutation(
-    async (sourceId) => {
-      const token = localStorage.getItem('token');
-      return axios.post(
-        `${API_URL}/scraping/${sourceId}`,
-        sourceId === 'infogreffe' ? enrichmentParams : {},
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      onSuccess: () => {
+        queryClient.invalidateQueries(['companies']);
+        queryClient.invalidateQueries(['stats']);
+      },
+      onError: (error) => {
+        console.error('Upload error:', error);
+      }
     }
   );
 
+  // Start scraping mutations
+  const pappersMutation = useMutation(
+    () => api.post('/scraping/pappers'),
+    {
+      onSuccess: () => queryClient.invalidateQueries('stats')
+    }
+  );
+
+  const societeMutation = useMutation(
+    () => api.post('/scraping/societe'),
+    {
+      onSuccess: () => queryClient.invalidateQueries('stats')
+    }
+  );
+
+  const infogreffeMutation = useMutation(
+    () => api.post('/scraping/infogreffe'),
+    {
+      onSuccess: () => queryClient.invalidateQueries('stats')
+    }
+  );
+
+  // Handle file drop
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragActive(false);
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].type === 'text/csv') {
+      uploadMutation.mutate(files[0]);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setDragActive(false);
+  };
+
+  // Handle file input change
+  const handleFileInput = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type === 'text/csv') {
+      uploadMutation.mutate(file);
+    }
+  };
+
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Collecte de données
-      </Typography>
+    <div className="min-h-screen bg-gray-900 text-white">
+      <div className="container mx-auto px-6 py-8 space-y-8">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight flex items-center gap-3">
+              <Database className="h-8 w-8 text-blue-400" />
+              Collecte de données
+            </h1>
+            <p className="text-gray-400 mt-2">
+              Importez, enrichissez et collectez automatiquement des données d'entreprises
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Button
+              variant="outline"
+              className="gap-2 border-gray-600 text-gray-300 hover:bg-gray-800"
+            >
+              <Settings className="h-4 w-4" />
+              Reset paramètres
+            </Button>
+          </div>
+        </div>
 
-      {/* Upload CSV */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Import de données
-        </Typography>
-        <Typography variant="body2" color="text.secondary" paragraph>
-          Importez vos propres listes d'entreprises au format CSV
-        </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<CloudUpload />}
-          onClick={() => setUploadOpen(true)}
-        >
-          Importer un fichier CSV
-        </Button>
-      </Paper>
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* CSV Upload Section */}
+          <div className="lg:col-span-2">
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Upload className="h-5 w-5 text-blue-400" />
+                <h2 className="text-xl font-semibold">Import de données CSV</h2>
+              </div>
+              <p className="text-gray-400 text-sm mb-6">
+                Importez vos propres listes d'entreprises. Le fichier doit contenir les colonnes SIREN et nom d'entreprise.
+              </p>
 
-      {/* Scraping Sources */}
-      <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-        Sources de scraping
-      </Typography>
-      <Grid container spacing={3}>
-        {sources.map((source) => (
-          <Grid item xs={12} md={4} key={source.id}>
-            <ScrapingSource
-              source={source}
-              onStart={() => startScrapingMutation.mutate(source.id)}
-            />
-          </Grid>
-        ))}
-      </Grid>
+              {/* Drop Zone */}
+              <div
+                className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
+                  dragActive 
+                    ? 'border-blue-500 bg-blue-500/10' 
+                    : 'border-gray-600 hover:border-gray-500'
+                }`}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+              >
+                <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">
+                  Glissez-déposez votre fichier CSV
+                </h3>
+                <p className="text-gray-400 text-sm mb-4">
+                  ou cliquez pour sélectionner un fichier
+                </p>
+                <p className="text-gray-500 text-xs mb-4">
+                  📄 Format CSV uniquement - Max 10MB
+                </p>
+                
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileInput}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label htmlFor="file-upload">
+                  <Button 
+                    variant="default" 
+                    className="bg-blue-600 hover:bg-blue-700"
+                    disabled={uploadMutation.isLoading}
+                  >
+                    {uploadMutation.isLoading ? (
+                      <>
+                        <RefreshCcw className="h-4 w-4 mr-2 animate-spin" />
+                        Importation...
+                      </>
+                    ) : (
+                      <>
+                        <FileUp className="h-4 w-4 mr-2" />
+                        Importer le fichier
+                      </>
+                    )}
+                  </Button>
+                </label>
+              </div>
 
-      {/* Enrichment Parameters */}
-      <Paper sx={{ p: 3, mt: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Paramètres d'enrichissement
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
-            <TextField
-              label="CA minimum (€)"
-              type="number"
-              fullWidth
-              value={enrichmentParams.min_ca}
-              onChange={(e) => setEnrichmentParams({
-                ...enrichmentParams,
-                min_ca: parseInt(e.target.value)
-              })}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              label="Score minimum"
-              type="number"
-              fullWidth
-              value={enrichmentParams.min_score}
-              onChange={(e) => setEnrichmentParams({
-                ...enrichmentParams,
-                min_score: parseInt(e.target.value)
-              })}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              label="SIREN spécifique (optionnel)"
-              fullWidth
-              value={enrichmentParams.siren}
-              onChange={(e) => setEnrichmentParams({
-                ...enrichmentParams,
-                siren: e.target.value
-              })}
-            />
-          </Grid>
-        </Grid>
-      </Paper>
+              {/* Update existing companies section */}
+              <div className="mt-6 p-4 bg-gray-700/50 rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle className="h-4 w-4 text-green-400" />
+                  <h4 className="font-medium">Mettre à jour les entreprises existantes</h4>
+                </div>
+                <div className="text-sm text-gray-400 space-y-1">
+                  <p><strong>Colonnes requises :</strong></p>
+                  <ul className="list-disc list-inside ml-4 space-y-1">
+                    <li>SIREN (obligatoire)</li>
+                    <li>Nom entreprise (obligatoire)</li>
+                    <li>Email, téléphone, adresse (optionnel)</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
 
-      {/* Activity Log */}
-      <Paper sx={{ p: 3, mt: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Historique récent
-        </Typography>
-        <List>
-          <ListItem>
-            <ListItemIcon>
-              <CheckCircle color="success" />
-            </ListItemIcon>
-            <ListItemText
-              primary="Import CSV terminé"
-              secondary="il y a 5 minutes - 150 nouvelles entreprises"
-            />
-          </ListItem>
-          <ListItem>
-            <ListItemIcon>
-              <Info color="primary" />
-            </ListItemIcon>
-            <ListItemText
-              primary="Scraping Pappers en cours"
-              secondary="Département 75 - 45% complété"
-            />
-          </ListItem>
-          <ListItem>
-            <ListItemIcon>
-              <Error color="error" />
-            </ListItemIcon>
-            <ListItemText
-              primary="Erreur Société.com"
-              secondary="il y a 1 heure - Captcha détecté"
-            />
-          </ListItem>
-        </List>
-      </Paper>
+          {/* Quick Stats Cards */}
+          <div className="space-y-4">
+            {/* Sources actives */}
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-sm font-medium">Sources actives</p>
+                  <p className="text-3xl font-bold">3</p>
+                  <p className="text-blue-100 text-sm">Pappers, Société, Infogreffe</p>
+                </div>
+                <Database className="h-8 w-8 text-blue-200" />
+              </div>
+            </div>
 
-      <UploadDialog 
-        open={uploadOpen} 
-        onClose={() => setUploadOpen(false)} 
-      />
-    </Box>
+            {/* Enrichissement */}
+            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-100 text-sm font-medium">Enrichissement</p>
+                  <p className="text-3xl font-bold">Auto</p>
+                  <p className="text-green-100 text-sm">Paramètres configurables</p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-green-200" />
+              </div>
+            </div>
+
+            {/* Formats supportés */}
+            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-100 text-sm font-medium">Formats supportés</p>
+                  <p className="text-3xl font-bold">CSV</p>
+                  <p className="text-purple-100 text-sm">Import & Export</p>
+                </div>
+                <Download className="h-8 w-8 text-purple-200" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Information Banner */}
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <Info className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-blue-300 mb-2">Comment utiliser la collecte de données</h4>
+                <Badge variant="outline" className="border-blue-500 text-blue-300">
+                  Guide
+                </Badge>
+              </div>
+              <div className="text-sm text-blue-200 space-y-1">
+                <p>1. <strong>Importez</strong> vos listes CSV existantes avec les colonnes SIREN et nom d'entreprise</p>
+                <p>2. <strong>Configurez</strong> les paramètres d'enrichissement selon vos besoins</p>
+                <p>3. <strong>Lancez</strong> les sources de scraping pour enrichir automatiquement</p>
+                <p>4. <strong>Consultez</strong> la timeline pour suivre les opérations en temps réel</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sources de scraping automatique */}
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-semibold flex items-center gap-2">
+                <Zap className="h-6 w-6 text-yellow-400" />
+                Sources de scraping automatique
+              </h2>
+              <p className="text-gray-400 mt-1">
+                Collectez automatiquement des données depuis différentes sources
+              </p>
+            </div>
+            
+            <Badge variant="outline" className="border-gray-600 text-gray-300">
+              3 sources disponibles
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Pappers API */}
+            <Card className="bg-gray-800 border-gray-700 p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                    <Database className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Pappers API</h3>
+                    <Badge variant="secondary" className="mt-1 bg-green-500/20 text-green-400 border-green-500/30">
+                      PRÊT
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              <p className="text-gray-400 text-sm mb-4">
+                Recherche via l'API Pappers - Données officielles
+              </p>
+              <div className="space-y-2 mb-4">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full border-blue-500 text-blue-400 hover:bg-blue-500/10"
+                  onClick={() => pappersMutation.mutate()}
+                  disabled={pappersMutation.isLoading}
+                >
+                  {pappersMutation.isLoading ? (
+                    <RefreshCcw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4 mr-2" />
+                  )}
+                  Lancer
+                </Button>
+                <Button variant="ghost" size="sm" className="w-full text-gray-400 hover:text-white">
+                  <RefreshCcw className="h-4 w-4 mr-2" />
+                  Actualiser
+                </Button>
+              </div>
+            </Card>
+
+            {/* Société.com */}
+            <Card className="bg-gray-800 border-gray-700 p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                    <Activity className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Société.com</h3>
+                    <Badge variant="secondary" className="mt-1 bg-green-500/20 text-green-400 border-green-500/30">
+                      PRÊT
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              <p className="text-gray-400 text-sm mb-4">
+                Scraping du site Société.com - Données enrichies
+              </p>
+              <div className="space-y-2 mb-4">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full border-purple-500 text-purple-400 hover:bg-purple-500/10"
+                  onClick={() => societeMutation.mutate()}
+                  disabled={societeMutation.isLoading}
+                >
+                  {societeMutation.isLoading ? (
+                    <RefreshCcw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4 mr-2" />
+                  )}
+                  Lancer
+                </Button>
+                <Button variant="ghost" size="sm" className="w-full text-gray-400 hover:text-white">
+                  <RefreshCcw className="h-4 w-4 mr-2" />
+                  Actualiser
+                </Button>
+              </div>
+            </Card>
+
+            {/* Infogreffe */}
+            <Card className="bg-gray-800 border-gray-700 p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                    <FileUp className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Infogreffe</h3>
+                    <Badge variant="secondary" className="mt-1 bg-green-500/20 text-green-400 border-green-500/30">
+                      PRÊT
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              <p className="text-gray-400 text-sm mb-4">
+                Enrichissement Infogreffe - Données officielles
+              </p>
+              <div className="space-y-2 mb-4">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full border-green-500 text-green-400 hover:bg-green-500/10"
+                  onClick={() => infogreffeMutation.mutate()}
+                  disabled={infogreffeMutation.isLoading}
+                >
+                  {infogreffeMutation.isLoading ? (
+                    <RefreshCcw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4 mr-2" />
+                  )}
+                  Lancer
+                </Button>
+                <Button variant="ghost" size="sm" className="w-full text-gray-400 hover:text-white">
+                  <RefreshCcw className="h-4 w-4 mr-2" />
+                  Actualiser
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+
+        {/* Activity Timeline */}
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-semibold flex items-center gap-2">
+                <Activity className="h-6 w-6 text-blue-400" />
+                Activité récente
+              </h2>
+            </div>
+          </div>
+
+          <Card className="bg-gray-800 border-gray-700 p-6">
+            <div className="text-center py-12">
+              <Activity className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+              <p className="text-gray-400">Aucune activité récente</p>
+              <p className="text-gray-500 text-sm mt-1">
+                Les opérations de collecte et d'enrichissement apparaîtront ici
+              </p>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
   );
 }

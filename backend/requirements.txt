@@ -1,32 +1,155 @@
-# Core
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-pydantic-settings==2.0.3
-pydantic[email]==2.4.2
+# M&A Intelligence Platform - Backend Requirements
+# Python 3.10+ Compatible - Production Ready
 
-# Database
-supabase==2.0.2
-psycopg2-binary==2.9.9
+# === CORE FRAMEWORK ===
+fastapi>=0.105.0,<0.115.0
+uvicorn[standard]>=0.24.0,<1.0.0
+python-multipart>=0.0.6,<1.0.0
+python-jose[cryptography]>=3.3.0,<4.0.0
+passlib[bcrypt]>=1.7.4,<2.0.0
+python-dotenv>=1.0.0,<2.0.0
 
-# Data processing
-pandas==2.1.3
-numpy==1.26.2
-openpyxl==3.1.2
+# === DATA VALIDATION ===
+pydantic-settings>=2.0.3,<3.0.0
+pydantic[email]>=2.4.2,<3.0.0
+email-validator>=2.1.0
 
-# Scraping
-aiohttp==3.9.1
-playwright==1.40.0
-beautifulsoup4==4.12.2
-selenium==4.16.0
-undetected-chromedriver==3.5.4
+# === DATABASE (SQLAlchemy + PostgreSQL) ===
+sqlalchemy>=2.0.23,<3.0.0
+psycopg2-binary>=2.9.9,<3.0.0
+alembic>=1.12.1,<2.0.0
 
-# AI & ML
-openai==0.28.1
+# === CACHE (Redis) & PERFORMANCE ===
+# celery[redis] requires redis <5.0.0
+redis[hiredis]>=4.5.2,<5.0.0
+kombu>=5.3.4,<6.0.0
 
-# Utils
-python-dotenv==1.0.0
-pytest==7.4.3
-pytest-asyncio==0.21.1
+# === PERFORMANCE & MONITORING ===
+slowapi>=0.1.9,<1.0.0
+memory-profiler>=0.61.0,<1.0.0
+psutil>=5.9.6,<7.0.0
+py-spy>=0.3.14,<1.0.0
+starlette>=0.30.0,<0.32.0
+
+# === ADVANCED MONITORING & OBSERVABILITY ===
+prometheus-client>=0.19.0,<1.0.0
+prometheus-fastapi-instrumentator>=7.0.0,<8.0.0
+opentelemetry-api>=1.21.0,<2.0.0
+opentelemetry-sdk>=1.21.0,<2.0.0
+opentelemetry-exporter-jaeger>=1.21.0,<2.0.0
+opentelemetry-instrumentation-fastapi>=0.40b0
+opentelemetry-instrumentation-sqlalchemy>=0.40b0
+opentelemetry-instrumentation-redis>=0.40b0
+
+# === METRICS & ALERTING ===
+scikit-learn>=1.3.2,<2.0.0
+matplotlib>=3.8.2,<4.0.0
+seaborn>=0.13.0,<1.0.0
+plotly>=5.17.0,<6.0.0
+
+# === NOTIFICATIONS & COMMUNICATION ===
+slack-sdk>=3.24.0,<4.0.0
+jinja2>=3.1.2,<4.0.0
+
+# === TIME SERIES & ANALYTICS ===
+influxdb-client>=1.39.0,<2.0.0
+pytz>=2023.3
+croniter>=2.0.1,<3.0.0
+
+# === COMPRESSION ===
+brotlicffi>=1.0.9.0,<3.0.0
+
+# === DATA PROCESSING ===
+pandas>=2.1.3,<3.0.0
+numpy>=1.26.2,<2.0.0
+
+# === WEB SCRAPING ===
+aiohttp>=3.9.1,<4.0.0
+beautifulsoup4>=4.12.2,<5.0.0
+selenium>=4.15.2,<5.0.0
+playwright>=1.52.0,<2.0.0
+
+# === EXTERNAL APIs ===
+openai>=1.3.5
+httpx>=0.24.0,<1.0.0
+
+# === SECURITY & COMPLIANCE ===
+cryptography>=41.0.7,<43.0.0
+pyotp>=2.9.0,<4.0.0
+qrcode[pil]>=7.4.2,<9.0.0
+argon2-cffi>=23.1.0,<25.0.0
+bcrypt>=4.1.2,<6.0.0
+pycryptodome>=3.19.0,<4.0.0
+
+# === AUTHENTICATION & AUTHORIZATION ===
+pyjwt[crypto]>=2.8.0,<3.0.0
+authlib>=1.2.1,<3.0.0
+
+# === SECURITY HEADERS & PROTECTION ===
+secure>=0.3.0,<1.0.0
+python-csp>=0.1,<1.0.0
+
+# === RATE LIMITING ===
+limits>=3.6.0,<4.0.0
+flask-limiter>=3.5.0,<4.0.0
+
+# === SECURITY SCANNING ===
+bandit>=1.7.5,<2.0.0
+safety>=2.3.5,<3.0.0
+
+# === GDPR & DATA PROTECTION ===
+# gdpr-tools>=0.2.0  # COMMENTED: no compatible release found
+
+# === AI/ML FRAMEWORKS ===
+tensorflow>=2.13.0,<2.15.0
+torch>=2.1.0,<2.2.0
+torchvision>=0.16.0,<0.17.0
+transformers>=4.30.0,<4.35.0
+sentence-transformers>=2.2.0,<2.4.0
+huggingface-hub>=0.19.0,<0.21.0
+
+# === NATURAL LANGUAGE PROCESSING ===
+spacy>=3.7.0,<3.8.0
+nltk>=3.8.0,<4.0.0
+textblob>=0.17.0,<1.0.0
+langdetect>=1.0.9
+wordcloud>=1.9.0,<2.0.0
+spacy-transformers>=1.3.0,<1.4.0
+
+# === ML FEATURE ENGINEERING ===
+feature-engine>=1.6.0
+joblib>=1.3.0
+mlflow>=2.8.0,<2.10.0
+optuna>=3.5.0,<3.7.0
+hyperopt>=0.2.7
+
+# === ADVANCED ANALYTICS & TIME SERIES ===
+prophet>=1.1.0
+statsmodels>=0.14.0
+xgboost>=2.0.0
+lightgbm>=4.1.0
+catboost>=1.2.0
+
+# === ADVANCED DATA PROCESSING ===
+networkx>=3.2.0,<4.0.0
+fuzzywuzzy>=0.18.0
+python-levenshtein>=0.23.0,<1.0.0
+jellyfish>=1.0.0,<2.0.0
+
+# === MODEL INTERPRETATION ===
+shap>=0.44.0
+lime>=0.2.0
+eli5>=0.13.0
+
+# === DEEP LEARNING SUPPORT ===
+keras>=2.13.0,<3.0.0
+onnx>=1.15.0,<2.0.0
+onnxruntime>=1.16.0,<2.0.0
+
+# === CACHING ===
+diskcache>=5.6.0,<6.0.0
+
+# === DEVELOPMENT & TESTING ===
+pytest>=7.4.0,<9.0.0
+black>=23.11.0,<26.0.0
+# pytest-security>=0.1.0  # COMMENTED: no compatible release found
