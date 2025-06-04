@@ -1,8 +1,3 @@
-"""
-Scraper Société.com unifié avec cache intégré
-Remplace societe.py avec cache et rate limiting de base_scraper
-"""
-
 import asyncio
 import random
 import re
@@ -12,12 +7,10 @@ from datetime import datetime
 from playwright.async_api import async_playwright
 from urllib.parse import quote, urljoin
 
-from .base_scraper import RateLimitedScraper, normalize_siren, is_valid_siren
-
 logger = logging.getLogger(__name__)
 
-class SocieteClient(RateLimitedScraper):
-    """Client unifié pour Société.com avec cache et rate limiting"""
+class SocieteScraper:
+    """Scraper asynchrone pour Société.com avec Playwright"""
     
     BASE_URL = "https://www.societe.com"
     SEARCH_URL = "https://www.societe.com/cgi-bin/search"
@@ -28,37 +21,32 @@ class SocieteClient(RateLimitedScraper):
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0'
     ]
     
-    def __init__(self, db_client=None):
-        # Cache 12h pour données extraites, rate limit 30 req/min (plus strict que API)
-        super().__init__(db_client, cache_ttl=43200, rate_limit=30, rate_window=60)
+    def __init__(self, db_client):
+        self.db = db_client
         self.browser = None
         self.context = None
         self.page = None
         self.existing_sirens = set()
         self.new_companies_count = 0
         self.skipped_companies_count = 0
-    
+        
     async def __aenter__(self):
-        await super().__aenter__()
         await self._setup_browser()
         await self._load_existing_sirens()
         return self
-    
+        
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.browser:
             await self.browser.close()
-        await super().__aexit__(exc_type, exc_val, exc_tb)
     
     async def _load_existing_sirens(self):
-        """Charge les SIRENs existants depuis la base"""
-        if self.db:
-            try:
-                # Simuler le chargement des SIRENs existants
-                # À remplacer par une vraie requête DB
-                self.existing_sirens = set()
-                logger.info(f"Loaded {len(self.existing_sirens)} existing SIRENs")
-            except Exception as e:
-                logger.error(f"Error loading existing SIRENs: {e}")
+        """Charge les SIREN existants"""
+        try:
+            response = self.db.table('cabinets_comptables').select('siren').execute()
+            self.existing_sirens = set(str(company['siren']) for company in response.data)
+            logger.info(f"Chargé {len(self.existing_sirens)} SIREN existants")
+        except Exception as e:
+            logger.error(f"Erreur chargement SIREN: {e}")
     
     async def _setup_browser(self):
         """Configure le navigateur avec anti-détection"""
@@ -97,46 +85,24 @@ class SocieteClient(RateLimitedScraper):
         self.page = await self.context.new_page()
     
     async def _random_delay(self, min_seconds: float = 0.5, max_seconds: float = 2.0):
-        """Délai aléatoire pour anti-détection"""
+        """Délai aléatoire"""
         await asyncio.sleep(random.uniform(min_seconds, max_seconds))
     
-    async def search_companies(self, department: str = None, page_num: int = 1, **criteria) -> List[Dict]:
-        """Recherche d'entreprises par critères"""
-        
-        # Créer une clé de cache basée sur les paramètres
-        from .base_scraper import hash_query
-        search_params = {
-            'department': department,
-            'page': page_num,
-            'naf': '6920Z',
-            **criteria
-        }
-        cache_key = f"search_{hash_query(search_params)}"
-        
-        async def fetch_search():
-            return await self._rate_limited_request(
-                self._scrape_search_page,
-                department, page_num, **criteria
-            )
-        
-        result = await self._cached_request(cache_key, fetch_search)
-        return result if result else []
-    
-    async def _scrape_search_page(self, department: str, page_num: int, **criteria) -> List[Dict]:
-        """Effectue le scraping d'une page de recherche"""
+    async def search_companies(self, department: str, page_num: int = 1) -> tuple[List[Dict], bool]:
+        """Recherche les entreprises par département"""
         companies = []
         
         try:
             # Construction URL
             params = {
-                'champs': department or '75',
+                'champs': department,
                 'naf': '6920Z',
                 'page': str(page_num)
             }
             query_string = '&'.join([f"{k}={quote(v)}" for k, v in params.items()])
             search_url = f"{self.SEARCH_URL}?{query_string}"
             
-            logger.info(f"Société.com: recherche département {department}, page {page_num}")
+            logger.info(f"Recherche département {department}, page {page_num}")
             
             # Navigation
             await self.page.goto(search_url, wait_until='networkidle')
@@ -145,7 +111,7 @@ class SocieteClient(RateLimitedScraper):
             # Vérifier captcha
             if await self.page.locator('div.g-recaptcha').count() > 0:
                 logger.warning("Captcha détecté")
-                return companies
+                return companies, False
             
             # Extraction des liens
             await self.page.wait_for_selector('div#result-list', timeout=10000)
@@ -167,74 +133,43 @@ class SocieteClient(RateLimitedScraper):
                             company_info = {
                                 'siren': siren,
                                 'url': urljoin(self.BASE_URL, href),
-                                'nom_entreprise': await link.inner_text(),
-                                'source': 'societe_com'
+                                'nom_entreprise': await link.inner_text()
                             }
                             companies.append(company_info)
                             
                 except Exception as e:
                     logger.error(f"Erreur extraction lien: {e}")
             
-            return companies
+            # Page suivante ?
+            has_next = await self.page.locator('a:has-text("Suivant")').count() > 0
+            
+            return companies, has_next
             
         except Exception as e:
-            logger.error(f"Erreur recherche Société.com: {e}")
-            return companies
+            logger.error(f"Erreur recherche: {e}")
+            return companies, False
     
-    async def get_company_details(self, siren: str) -> Optional[Dict]:
-        """Récupère les détails d'une entreprise par SIREN ou URL"""
-        siren = normalize_siren(siren)
-        if not is_valid_siren(siren):
-            logger.error(f"Invalid SIREN: {siren}")
-            return None
-        
-        async def fetch_details():
-            return await self._rate_limited_request(
-                self._scrape_company_details,
-                siren
-            )
-        
-        return await self._cached_request(siren, fetch_details)
-    
-    async def _scrape_company_details(self, siren: str) -> Optional[Dict]:
-        """Scrape les détails d'une entreprise depuis Société.com"""
+    async def scrape_company_details(self, company_info: Dict) -> Optional[Dict]:
+        """Récupère les détails d'une entreprise"""
         try:
-            # Construire l'URL de recherche pour le SIREN
-            search_url = f"{self.SEARCH_URL}?champs={siren}"
-            
-            logger.info(f"Société.com: scraping détails pour SIREN {siren}")
+            url = company_info['url']
+            logger.info(f"Scraping {company_info['nom_entreprise']}")
             
             await self._random_delay(2, 5)
-            await self.page.goto(search_url, wait_until='networkidle')
+            await self.page.goto(url, wait_until='networkidle')
             
             # Vérifier captcha
             if await self.page.locator('div.g-recaptcha').count() > 0:
-                logger.warning("Captcha détecté")
                 return None
-            
-            # Trouver le lien vers la fiche entreprise
-            company_link = await self.page.locator(f'a[href*="/societe/"][href*="{siren}"]').first
-            if await company_link.count() == 0:
-                logger.warning(f"Entreprise non trouvée: {siren}")
-                return None
-            
-            # Aller sur la page de détails
-            await company_link.click()
-            await self.page.wait_for_load_state('networkidle')
             
             # Extraction des données
             data = {
-                'siren': siren,
-                'lien_societe_com': self.page.url,
+                'siren': company_info['siren'],
+                'nom_entreprise': company_info['nom_entreprise'],
+                'lien_societe_com': url,
                 'statut': 'à contacter',
-                'source': 'societe_com',
                 'last_scraped_at': datetime.now().isoformat()
             }
-            
-            # Nom de l'entreprise
-            nom_element = await self._safe_get_text('h1.company-title')
-            if nom_element:
-                data['nom_entreprise'] = nom_element
             
             # Sélecteurs pour les données
             selectors = {
@@ -253,10 +188,7 @@ class SocieteClient(RateLimitedScraper):
             if capital_text:
                 match = re.search(r'([\d\s]+)', capital_text.replace(' ', ''))
                 if match:
-                    try:
-                        data['capital_social'] = int(match.group(1))
-                    except ValueError:
-                        pass
+                    data['capital_social'] = int(match.group(1))
             
             # Date création
             date_text = await self._safe_get_text('td:has-text("Date création entreprise") + td')
@@ -271,13 +203,23 @@ class SocieteClient(RateLimitedScraper):
             # Dirigeants
             await self._extract_dirigeants(data)
             
-            # Adresse
-            await self._extract_address(data)
+            # Vérifier CA
+            ca = data.get('chiffre_affaires', 0)
+            if ca and (ca < 3000000 or ca > 50000000):
+                return None
             
-            return data
+            # Sauvegarder
+            try:
+                clean_data = self._clean_data_for_db(data)
+                self.db.table('cabinets_comptables').insert(clean_data).execute()
+                self.new_companies_count += 1
+                return clean_data
+            except Exception as e:
+                logger.error(f"Erreur sauvegarde: {e}")
+                return None
                 
         except Exception as e:
-            logger.error(f"Erreur scraping détails SIREN {siren}: {e}")
+            logger.error(f"Erreur scraping détails: {e}")
             return None
     
     async def _safe_get_text(self, selector: str) -> Optional[str]:
@@ -300,11 +242,8 @@ class SocieteClient(RateLimitedScraper):
                 parent = await elem.locator('..').inner_text()
                 match = re.search(r'([\d\s]+)(?:\s*€|EUR)', parent.replace(' ', ''))
                 if match:
-                    try:
-                        data['chiffre_affaires'] = int(match.group(1))
-                        break
-                    except ValueError:
-                        pass
+                    data['chiffre_affaires'] = int(match.group(1))
+                    break
             except:
                 continue
         
@@ -315,11 +254,8 @@ class SocieteClient(RateLimitedScraper):
                 parent = await elem.locator('..').inner_text()
                 match = re.search(r'(-?[\d\s]+)(?:\s*€|EUR)', parent.replace(' ', ''))
                 if match:
-                    try:
-                        data['resultat'] = int(match.group(1))
-                        break
-                    except ValueError:
-                        pass
+                    data['resultat'] = int(match.group(1))
+                    break
             except:
                 continue
     
@@ -345,27 +281,6 @@ class SocieteClient(RateLimitedScraper):
             data['dirigeants_json'] = dirigeants
             data['dirigeant_principal'] = f"{dirigeants[0]['nom_complet']} ({dirigeants[0]['qualite']})"
     
-    async def _extract_address(self, data: Dict):
-        """Extrait l'adresse complète"""
-        try:
-            adresse_parts = []
-            
-            # Adresse ligne 1
-            adresse1 = await self._safe_get_text('td:has-text("Adresse") + td')
-            if adresse1:
-                adresse_parts.append(adresse1)
-            
-            # Code postal et ville
-            cp_ville = await self._safe_get_text('td:has-text("Code postal") + td, td:has-text("Ville") + td')
-            if cp_ville:
-                adresse_parts.append(cp_ville)
-            
-            if adresse_parts:
-                data['adresse'] = ', '.join(adresse_parts)
-                
-        except Exception as e:
-            logger.debug(f"Erreur extraction adresse: {e}")
-    
     async def _safe_get_text_from_element(self, parent, selector: str) -> Optional[str]:
         """Récupère le texte depuis un élément parent"""
         try:
@@ -376,64 +291,7 @@ class SocieteClient(RateLimitedScraper):
             pass
         return None
     
-    async def enrich_company_data(self, basic_data: Dict) -> Dict:
-        """Enrichit les données de base d'une entreprise"""
-        siren = basic_data.get('siren')
-        if not siren:
-            return basic_data
-        
-        detailed_data = await self.get_company_details(siren)
-        if detailed_data:
-            # Merger les données
-            enriched = {**basic_data, **detailed_data}
-            enriched['source'] = 'societe_com'
-            enriched['last_updated'] = datetime.now().isoformat()
-            return enriched
-        
-        return basic_data
-    
-    async def bulk_search(self, departments: List[str], max_pages: int = 5) -> List[Dict]:
-        """Recherche en lot pour plusieurs départements"""
-        results = []
-        
-        for dept in departments:
-            logger.info(f"Société.com: scraping département {dept}")
-            
-            page_num = 1
-            has_next = True
-            
-            while has_next and page_num <= max_pages:
-                try:
-                    companies = await self.search_companies(dept, page_num)
-                    
-                    if not companies:
-                        has_next = False
-                        break
-                    
-                    # Enrichir chaque entreprise
-                    for company_info in companies:
-                        try:
-                            detailed_company = await self.get_company_details(company_info['siren'])
-                            if detailed_company:
-                                # Fusionner les données de recherche et de détail
-                                enriched = {**company_info, **detailed_company}
-                                results.append(enriched)
-                                
-                        except Exception as e:
-                            logger.error(f"Erreur enrichissement {company_info.get('siren')}: {e}")
-                    
-                    page_num += 1
-                    
-                    # Délai anti-détection
-                    await self._random_delay(3, 8)
-                    
-                except Exception as e:
-                    logger.error(f"Erreur page {page_num} département {dept}: {e}")
-                    has_next = False
-        
-        return results
-    
-    def clean_data_for_db(self, data: Dict) -> Dict:
+    def _clean_data_for_db(self, data: Dict) -> Dict:
         """Nettoie les données pour la base"""
         clean_data = {}
         numeric_fields = ['chiffre_affaires', 'resultat', 'capital_social', 'effectif']
@@ -449,6 +307,74 @@ class SocieteClient(RateLimitedScraper):
                 clean_data[key] = str(value)
         
         return clean_data
+    
+    async def run_full_scraping(self, status_tracker):
+        """Lance le scraping complet"""
+        departments = ['75', '77', '78', '91', '92', '93', '94', '95']
+        
+        async with self:
+            for i, dept in enumerate(departments):
+                status_tracker.message = f"Scraping Société.com - Département {dept}"
+                logger.info(status_tracker.message)
+                
+                page_num = 1
+                has_next = True
+                
+                while has_next and page_num <= 5:  # Limite pages
+                    companies, has_next = await self.search_companies(dept, page_num)
+                    
+                    for company in companies:
+                        await self.scrape_company_details(company)
+                        
+                        # Mettre à jour statut
+                        status_tracker.new_companies = self.new_companies_count
+                        status_tracker.skipped_companies = self.skipped_companies_count
+                        
+                        # Pause anti-détection
+                        if self.new_companies_count % 10 == 0:
+                            await self._random_delay(30, 60)
+                    
+                    page_num += 1
+                    status_tracker.progress = int((i + 1) / len(departments) * 100)
+                
+            status_tracker.message = f"Terminé: {self.new_companies_count} nouvelles entreprises"
+            status_tracker.progress = 100
 
-# Export de la classe principale
-__all__ = ['SocieteClient']
+
+# Standalone functions for API routes compatibility
+async def scrape_companies(query: str = None, max_pages: int = 5, **kwargs) -> List[Dict]:
+    """Standalone function for scraping companies from Société.com"""
+    from app.db.supabase import get_supabase_client
+    
+    try:
+        db_client = get_supabase_client()
+        
+        async with SocieteScraper(db_client) as scraper:
+            all_companies = []
+            departments = kwargs.get('departments', ['75', '77', '78', '91', '92', '93', '94', '95'])
+            
+            for dept in departments:
+                logger.info(f"Scraping Société.com - Département {dept}")
+                
+                page_num = 1
+                has_next = True
+                
+                while has_next and page_num <= max_pages:
+                    companies, has_next = await scraper.search_companies(dept, page_num)
+                    
+                    for company_info in companies:
+                        detailed_company = await scraper.scrape_company_details(company_info)
+                        if detailed_company:
+                            all_companies.append(detailed_company)
+                    
+                    page_num += 1
+                    
+                    # Anti-detection delay
+                    await scraper._random_delay(2, 5)
+            
+            logger.info(f"Société.com scraping completed: {len(all_companies)} companies")
+            return all_companies
+            
+    except Exception as e:
+        logger.error(f"Error in scrape_companies: {e}")
+        return []
