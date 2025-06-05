@@ -237,4 +237,3 @@ make status      # Vérification quotidienne
 # Ou n8n si besoins intégrations business
 ```
 
-L'orchestration ML n'a jamais été aussi simple ! 🎉

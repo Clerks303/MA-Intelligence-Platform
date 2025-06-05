@@ -45,26 +45,23 @@ pip-delete-this-directory.txt
 # VSCode Python settings
 .vscode/
 
-# Frontend
+# Frontend  
 /frontend/node_modules
 /frontend/node_modules/.cache
 
-# Ne pas versionner node_modules
+# Backend
+/backend/venv/
+/backend/venv/.cache
+
+# Node
 node_modules/
 
-# Ne pas versionner le dossier venv Python
-.venv/
+# Frontend
+frontend/node_modules/
+frontend/node_modules/.cache/
 
-# Cache npm (optionnel mais conseillé)
-npm-cache/
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# IDEs et OS
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
+# Python
+venv/
+dist/
+build/
+*.log
