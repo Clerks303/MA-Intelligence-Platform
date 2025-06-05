@@ -44,16 +44,14 @@ const HealthStatus = () => {
   const [detailed, setDetailed] = useState(false);
 
   // Query health status
-  const { data: healthData, isLoading, refetch } = useQuery(
-    ['health-status', detailed],
-    () => api.get('/monitoring/health', {
+  const { data: healthData, isLoading, refetch } = useQuery({
+    queryKey: ['health-status', detailed],
+    queryFn: () => api.get('/monitoring/health', {
       params: { detailed }
     }).then(res => res.data),
-    {
-      refetchInterval: 30000, // 30 secondes
-      keepPreviousData: true
-    }
-  );
+    refetchInterval: 30000, // 30 secondes
+    keepPreviousData: true
+  });
 
   // Icônes par type de service
   const getServiceIcon = (serviceType) => {

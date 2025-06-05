@@ -12,7 +12,8 @@ import {
   BarChart3,
   Activity,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  AlertTriangle
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
@@ -24,35 +25,79 @@ import { ThemeToggle } from '../components/ui/theme-toggle';
 import { cn } from '../lib/utils';
 
 export default function Dashboard() {
-  const { data: stats, isLoading, refetch, isRefetching } = useQuery({
+  const { data: stats, isLoading, refetch, isRefetching, error } = useQuery({
     queryKey: ['stats'],
     queryFn: () => api.get('/stats').then(res => res.data),
     refetchInterval: 30000,
     staleTime: 25000,
+    retry: 2,
+    retryDelay: 1000,
   });
 
-  const formatMoney = (amount) => {
-    if (!amount || amount === 0) return '0€';
-    
-    if (amount >= 1000000000) {
-      return `${(amount / 1000000000).toFixed(1)} Mds€`;
-    } else if (amount >= 1000000) {
-      return `${(amount / 1000000).toFixed(1)} M€`;
-    } else if (amount >= 1000) {
-      return `${(amount / 1000).toFixed(0)} K€`;
+  // 🔒 SECURISATION : Fonctions utilitaires avec vérifications null/undefined
+  const safeFormatMoney = (amount) => {
+    // Vérification stricte des valeurs null/undefined
+    if (amount === null || amount === undefined || amount === '' || isNaN(amount)) {
+      return '0€';
     }
-    return `${Math.round(amount)}€`;
+    
+    const numAmount = Number(amount);
+    if (numAmount >= 1000000000) {
+      return `${(numAmount / 1000000000).toFixed(1)} Mds€`;
+    } else if (numAmount >= 1000000) {
+      return `${(numAmount / 1000000).toFixed(1)} M€`;
+    } else if (numAmount >= 1000) {
+      return `${(numAmount / 1000).toFixed(0)} K€`;
+    }
+    return `${Math.round(numAmount)}€`;
   };
 
-  const formatNumber = (num) => {
-    if (!num) return '0';
-    return new Intl.NumberFormat('fr-FR').format(Math.round(num));
+  const safeFormatNumber = (num) => {
+    if (num === null || num === undefined || num === '' || isNaN(num)) {
+      return '0';
+    }
+    return new Intl.NumberFormat('fr-FR').format(Math.round(Number(num)));
   };
 
-  const formatPercentage = (num) => {
-    if (!num) return '0%';
-    return `${num > 0 ? '+' : ''}${num.toFixed(1)}%`;
+  const safeFormatPercentage = (num) => {
+    if (num === null || num === undefined || num === '' || isNaN(num)) {
+      return '0%';
+    }
+    const numValue = Number(num);
+    return `${numValue > 0 ? '+' : ''}${numValue.toFixed(1)}%`;
   };
+
+  // 🔒 SECURISATION : Valeurs par défaut sécurisées
+  const safeStats = {
+    total: stats?.total ?? 0,
+    ca_moyen: stats?.ca_moyen ?? 0,
+    ca_total: stats?.ca_total ?? 0,
+    avec_email: stats?.avec_email ?? 0,
+    avec_telephone: stats?.avec_telephone ?? 0,
+    effectif_moyen: stats?.effectif_moyen ?? 0,
+  };
+
+  // 🔒 SECURISATION : Gestion des états d'erreur
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4 max-w-md text-center">
+          <AlertTriangle className="h-12 w-12 text-red-400" />
+          <h2 className="text-xl font-semibold">Erreur de chargement</h2>
+          <p className="text-gray-400">
+            Impossible de charger les données du tableau de bord.
+          </p>
+          <Button
+            onClick={() => refetch()}
+            className="gap-2 bg-blue-600 hover:bg-blue-700"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Réessayer
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -65,14 +110,26 @@ export default function Dashboard() {
     );
   }
 
-  // Mock status data for the pie chart since we don't have it in the response
+  // 🔒 SECURISATION : Données du graphique avec vérifications
   const statusData = [
-    { name: 'A CONTACTER', value: stats?.total ? Math.floor(stats.total * 0.6) : 0, color: '#6b7280' },
-    { name: 'QUALIFIE', value: stats?.total ? Math.floor(stats.total * 0.3) : 0, color: '#3b82f6' },
-    { name: 'EN NEGOCIATION', value: stats?.total ? Math.floor(stats.total * 0.1) : 0, color: '#10b981' }
+    { 
+      name: 'A CONTACTER', 
+      value: safeStats.total ? Math.floor(safeStats.total * 0.6) : 0, 
+      color: '#6b7280' 
+    },
+    { 
+      name: 'QUALIFIE', 
+      value: safeStats.total ? Math.floor(safeStats.total * 0.3) : 0, 
+      color: '#3b82f6' 
+    },
+    { 
+      name: 'EN NEGOCIATION', 
+      value: safeStats.total ? Math.floor(safeStats.total * 0.1) : 0, 
+      color: '#10b981' 
+    }
   ];
 
-  // Mock trends
+  // 🔒 SECURISATION : Tendances mockées avec vérifications
   const trends = {
     companies: 12,
     revenue: 8.5,
@@ -98,7 +155,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="gap-2 border-gray-600 text-gray-300">
               <Calendar className="h-3 w-3" />
-              Mise à jour: 29/05/2025
+              Mise à jour: {new Date().toLocaleDateString('fr-FR')}
             </Badge>
             
             <ThemeToggle />
@@ -115,18 +172,18 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* KPI Cards Grid */}
+        {/* 🔒 SECURISATION : KPI Cards avec valeurs sécurisées */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
           {/* Entreprises */}
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 border-0 p-6 text-white">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-blue-100 text-sm font-medium uppercase tracking-wide">ENTREPRISES</p>
-                <p className="text-3xl font-bold">{formatNumber(stats?.total) || '3'}</p>
+                <p className="text-3xl font-bold">{safeFormatNumber(safeStats.total)}</p>
                 <p className="text-blue-100 text-sm">Total dans le pipeline</p>
                 <div className="flex items-center gap-1 mt-1">
                   <ArrowUp className="h-3 w-3 text-blue-200" />
-                  <span className="text-blue-200 text-xs">{formatPercentage(trends.companies)}</span>
+                  <span className="text-blue-200 text-xs">{safeFormatPercentage(trends.companies)}</span>
                 </div>
               </div>
               <div className="bg-blue-400/20 p-3 rounded-lg">
@@ -140,11 +197,11 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-green-100 text-sm font-medium uppercase tracking-wide">CA MOYEN</p>
-                <p className="text-3xl font-bold">{formatMoney(stats?.ca_moyen) || '10.0 M€'}</p>
+                <p className="text-3xl font-bold">{safeFormatMoney(safeStats.ca_moyen)}</p>
                 <p className="text-green-100 text-sm">Par entreprise</p>
                 <div className="flex items-center gap-1 mt-1">
                   <ArrowUp className="h-3 w-3 text-green-200" />
-                  <span className="text-green-200 text-xs">{formatPercentage(trends.revenue)}</span>
+                  <span className="text-green-200 text-xs">{safeFormatPercentage(trends.revenue)}</span>
                 </div>
               </div>
               <div className="bg-green-400/20 p-3 rounded-lg">
@@ -158,7 +215,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-purple-100 text-sm font-medium uppercase tracking-wide">CA TOTAL</p>
-                <p className="text-3xl font-bold">{formatMoney(stats?.ca_total) || '30.0 M€'}</p>
+                <p className="text-3xl font-bold">{safeFormatMoney(safeStats.ca_total)}</p>
                 <p className="text-purple-100 text-sm">Marché adressable</p>
               </div>
               <div className="bg-purple-400/20 p-3 rounded-lg">
@@ -172,11 +229,16 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-blue-100 text-sm font-medium uppercase tracking-wide">EMAILS</p>
-                <p className="text-3xl font-bold">{formatNumber(stats?.avec_email) || '3'}</p>
-                <p className="text-blue-100 text-sm">100.0% de couverture</p>
+                <p className="text-3xl font-bold">{safeFormatNumber(safeStats.avec_email)}</p>
+                <p className="text-blue-100 text-sm">
+                  {safeStats.total > 0 
+                    ? `${Math.round((safeStats.avec_email / safeStats.total) * 100)}% de couverture`
+                    : '0% de couverture'
+                  }
+                </p>
                 <div className="flex items-center gap-1 mt-1">
                   <ArrowUp className="h-3 w-3 text-blue-200" />
-                  <span className="text-blue-200 text-xs">{formatPercentage(trends.emails)}</span>
+                  <span className="text-blue-200 text-xs">{safeFormatPercentage(trends.emails)}</span>
                 </div>
               </div>
               <div className="bg-blue-400/20 p-3 rounded-lg">
@@ -190,11 +252,16 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-yellow-100 text-sm font-medium uppercase tracking-wide">TÉLÉPHONES</p>
-                <p className="text-3xl font-bold">{formatNumber(stats?.avec_telephone) || '3'}</p>
-                <p className="text-yellow-100 text-sm">100.0% de couverture</p>
+                <p className="text-3xl font-bold">{safeFormatNumber(safeStats.avec_telephone)}</p>
+                <p className="text-yellow-100 text-sm">
+                  {safeStats.total > 0 
+                    ? `${Math.round((safeStats.avec_telephone / safeStats.total) * 100)}% de couverture`
+                    : '0% de couverture'
+                  }
+                </p>
                 <div className="flex items-center gap-1 mt-1">
                   <ArrowDown className="h-3 w-3 text-yellow-200" />
-                  <span className="text-yellow-200 text-xs">{formatPercentage(trends.phones)}</span>
+                  <span className="text-yellow-200 text-xs">{safeFormatPercentage(trends.phones)}</span>
                 </div>
               </div>
               <div className="bg-yellow-400/20 p-3 rounded-lg">
@@ -208,7 +275,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-red-100 text-sm font-medium uppercase tracking-wide">EFFECTIF MOYEN</p>
-                <p className="text-3xl font-bold">{formatNumber(stats?.effectif_moyen) || '0'}</p>
+                <p className="text-3xl font-bold">{safeFormatNumber(safeStats.effectif_moyen)}</p>
                 <p className="text-red-100 text-sm">Collaborateurs</p>
               </div>
               <div className="bg-red-400/20 p-3 rounded-lg">
@@ -218,7 +285,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Charts Grid */}
+        {/* 🔒 SECURISATION : Charts avec données sécurisées */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Pie Chart */}
           <Card className="bg-gray-800 border-gray-700 p-6">
@@ -229,40 +296,49 @@ export default function Dashboard() {
               </div>
               <Badge variant="secondary" className="gap-1 bg-gray-700 text-gray-300 border-gray-600">
                 <BarChart3 className="h-3 w-3" />
-                1 statuts
+                {statusData.length} statuts
               </Badge>
             </div>
             
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                    animationDuration={800}
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={entry.color}
-                        className="hover:opacity-80 transition-opacity cursor-pointer"
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: '#1f2937',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#ffffff'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              {statusData.every(item => item.value === 0) ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <BarChart3 className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+                    <p className="text-gray-400">Aucune donnée disponible</p>
+                  </div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      animationDuration={800}
+                    >
+                      {statusData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry?.color || '#6b7280'}
+                          className="hover:opacity-80 transition-opacity cursor-pointer"
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: '#1f2937',
+                        border: '1px solid #374151',
+                        borderRadius: '8px',
+                        color: '#ffffff'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </Card>
 
@@ -280,34 +356,46 @@ export default function Dashboard() {
             </div>
             
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={[{ name: 'EN PROSPECT', value: 3 }]} margin={{ bottom: 60 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis 
-                    dataKey="name" 
-                    angle={-45} 
-                    textAnchor="end" 
-                    height={80}
-                    fontSize={12}
-                    stroke="#9ca3af"
-                  />
-                  <YAxis stroke="#9ca3af" fontSize={12} />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: '#1f2937',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#ffffff'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="value" 
-                    fill="#3b82f6"
-                    radius={[4, 4, 0, 0]}
-                    className="hover:opacity-80 transition-opacity"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              {safeStats.total === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <BarChart3 className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+                    <p className="text-gray-400">Aucune donnée disponible</p>
+                  </div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={[{ name: 'EN PROSPECT', value: safeStats.total }]} 
+                    margin={{ bottom: 60 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis 
+                      dataKey="name" 
+                      angle={-45} 
+                      textAnchor="end" 
+                      height={80}
+                      fontSize={12}
+                      stroke="#9ca3af"
+                    />
+                    <YAxis stroke="#9ca3af" fontSize={12} />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: '#1f2937',
+                        border: '1px solid #374151',
+                        borderRadius: '8px',
+                        color: '#ffffff'
+                      }}
+                    />
+                    <Bar 
+                      dataKey="value" 
+                      fill="#3b82f6"
+                      radius={[4, 4, 0, 0]}
+                      className="hover:opacity-80 transition-opacity"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </Card>
         </div>

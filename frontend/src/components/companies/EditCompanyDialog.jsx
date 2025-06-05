@@ -61,52 +61,50 @@ export function EditCompanyDialog({ open, onClose, company }) {
     }
   }, [company]);
 
-  const updateMutation = useMutation(
-    (updateData) => api.put(`/companies/${company?.siren}`, updateData),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('companies');
-        queryClient.invalidateQueries('stats');
-        onClose();
-      },
-      onError: (error) => {
-        console.error('Error updating company:', error);
-        
-        if (error.response?.status === 422) {
-          // Handle validation errors (422)
-          const detail = error.response?.data?.detail;
-          if (Array.isArray(detail)) {
-            // Multiple field errors
-            const fieldErrors = {};
-            const generalErrors = [];
-            
-            detail.forEach(err => {
-              if (err.loc && err.loc.length > 0) {
-                const field = err.loc[err.loc.length - 1];
-                fieldErrors[field] = err.msg;
-              } else {
-                generalErrors.push(err.msg);
-              }
-            });
-            
-            setErrors({
-              ...fieldErrors,
-              general: generalErrors.length > 0 ? generalErrors.join(', ') : 'Erreurs de validation détectées.'
-            });
-          } else if (typeof detail === 'string') {
-            setErrors({ general: detail });
-          } else {
-            setErrors({ general: 'Erreurs de validation. Vérifiez vos données.' });
-          }
+  const updateMutation = useMutation({
+    mutationFn: (updateData) => api.put(`/companies/${company?.siren}`, updateData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      onClose();
+    },
+    onError: (error) => {
+      console.error('Error updating company:', error);
+      
+      if (error.response?.status === 422) {
+        // Handle validation errors (422)
+        const detail = error.response?.data?.detail;
+        if (Array.isArray(detail)) {
+          // Multiple field errors
+          const fieldErrors = {};
+          const generalErrors = [];
+          
+          detail.forEach(err => {
+            if (err.loc && err.loc.length > 0) {
+              const field = err.loc[err.loc.length - 1];
+              fieldErrors[field] = err.msg;
+            } else {
+              generalErrors.push(err.msg);
+            }
+          });
+          
+          setErrors({
+            ...fieldErrors,
+            general: generalErrors.length > 0 ? generalErrors.join(', ') : 'Erreurs de validation détectées.'
+          });
+        } else if (typeof detail === 'string') {
+          setErrors({ general: detail });
         } else {
-          // Handle other errors
-          const detail = error.response?.data?.detail;
-          const message = typeof detail === 'string' ? detail : 'Erreur lors de la mise à jour.';
-          setErrors({ general: message });
+          setErrors({ general: 'Erreurs de validation. Vérifiez vos données.' });
         }
+      } else {
+        // Handle other errors
+        const detail = error.response?.data?.detail;
+        const message = typeof detail === 'string' ? detail : 'Erreur lors de la mise à jour.';
+        setErrors({ general: message });
       }
     }
-  );
+  });
 
   const validateForm = () => {
     const newErrors = {};

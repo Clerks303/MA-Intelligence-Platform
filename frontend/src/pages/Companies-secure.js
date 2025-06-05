@@ -12,9 +12,10 @@ import {
   Phone,
   TrendingUp,
   Plus,
-  MoreVertical,
   Star,
-  Calendar
+  Calendar,
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -46,96 +47,187 @@ export default function Companies() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [companyToEdit, setCompanyToEdit] = useState(null);
 
-  // Queries
-  // Transform filters for API call
+  // 🔒 SECURISATION : Transform filters avec vérifications strictes
   const transformFilters = (filters) => {
     const transformed = {};
     
-    // Only add non-empty values, convert types properly
-    if (filters.ca_min && filters.ca_min !== '') {
-      transformed.ca_min = parseFloat(filters.ca_min);
-    }
-    if (filters.effectif_min && filters.effectif_min !== '') {
-      transformed.effectif_min = parseInt(filters.effectif_min, 10);
-    }
-    if (filters.ville && filters.ville !== 'all') {
-      transformed.ville = filters.ville;
-    }
-    if (filters.statut && filters.statut !== 'all') {
-      transformed.statut = filters.statut;
-    }
-    if (filters.search && filters.search !== '') {
-      transformed.search = filters.search;
+    try {
+      // Vérifications strictes pour éviter les erreurs de type
+      if (filters?.ca_min && filters.ca_min !== '' && !isNaN(filters.ca_min)) {
+        transformed.ca_min = parseFloat(filters.ca_min);
+      }
+      if (filters?.effectif_min && filters.effectif_min !== '' && !isNaN(filters.effectif_min)) {
+        transformed.effectif_min = parseInt(filters.effectif_min, 10);
+      }
+      if (filters?.ville && filters.ville !== 'all' && filters.ville !== '') {
+        transformed.ville = String(filters.ville);
+      }
+      if (filters?.statut && filters.statut !== 'all' && filters.statut !== '') {
+        transformed.statut = String(filters.statut);
+      }
+      if (filters?.search && filters.search !== '') {
+        transformed.search = String(filters.search);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la transformation des filtres:', error);
     }
     
     return transformed;
   };
 
-  const { data: companies = [], isLoading } = useQuery({
+  // 🔒 SECURISATION : Queries avec gestion d'erreur robuste
+  const { data: companies = [], isLoading, error: companiesError, refetch } = useQuery({
     queryKey: ['companies', filters],
     queryFn: () => api.post('/companies/filter', transformFilters(filters)).then(res => res.data),
-    staleTime: 30000, // 30 seconds
+    staleTime: 30000,
     refetchOnWindowFocus: false,
+    retry: 2,
+    retryDelay: 1000,
+    onError: (error) => {
+      console.error('Erreur lors du chargement des entreprises:', error);
+    }
   });
 
   const { data: cities = [] } = useQuery({
     queryKey: ['cities'],
-    queryFn: () => api.get('/stats/cities').then(res => res.data.cities),
-    staleTime: 300000, // 5 minutes
+    queryFn: () => api.get('/stats/cities').then(res => res.data?.cities || []),
+    staleTime: 300000,
+    retry: 2,
+    onError: (error) => {
+      console.error('Erreur lors du chargement des villes:', error);
+    }
   });
 
-  // Mutations
+  // 🔒 SECURISATION : Mutations avec gestion d'erreur
   const deleteMutation = useMutation({
-    mutationFn: (siren) => api.delete(`/companies/${siren}`),
+    mutationFn: (siren) => {
+      if (!siren) throw new Error('SIREN manquant');
+      return api.delete(`/companies/${siren}`);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
+    },
+    onError: (error) => {
+      console.error('Erreur lors de la suppression:', error);
+      alert('Erreur lors de la suppression de l\'entreprise');
     }
   });
 
   const createMutation = useMutation({
-    mutationFn: (companyData) => api.post('/companies/', companyData),
+    mutationFn: (companyData) => {
+      if (!companyData) throw new Error('Données manquantes');
+      return api.post('/companies/', companyData);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
+    },
+    onError: (error) => {
+      console.error('Erreur lors de la création:', error);
     }
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ siren, data }) => api.put(`/companies/${siren}`, data),
+    mutationFn: ({ siren, data }) => {
+      if (!siren || !data) throw new Error('Données manquantes');
+      return api.put(`/companies/${siren}`, data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
+    },
+    onError: (error) => {
+      console.error('Erreur lors de la mise à jour:', error);
     }
   });
 
-  // Format functions
-  const formatCurrency = (amount) => {
-    if (!amount || amount === 0) return '-';
-    return new Intl.NumberFormat('fr-FR', { 
-      style: 'currency', 
-      currency: 'EUR',
-      notation: amount >= 1000000 ? 'compact' : 'standard',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
+  // 🔒 SECURISATION : Fonctions de formatage sécurisées
+  const safeFormatCurrency = (amount) => {
+    if (amount === null || amount === undefined || amount === '' || isNaN(amount)) {
+      return '-';
+    }
     try {
-      return format(new Date(dateString), 'dd/MM/yyyy', { locale: fr });
-    } catch {
+      const numAmount = Number(amount);
+      return new Intl.NumberFormat('fr-FR', { 
+        style: 'currency', 
+        currency: 'EUR',
+        notation: numAmount >= 1000000 ? 'compact' : 'standard',
+        maximumFractionDigits: 0
+      }).format(numAmount);
+    } catch (error) {
+      console.error('Erreur formatage currency:', error);
       return '-';
     }
   };
 
-  // Table columns
+  const safeFormatDate = (dateString) => {
+    if (!dateString) return '-';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '-';
+      return format(date, 'dd/MM/yyyy', { locale: fr });
+    } catch (error) {
+      console.error('Erreur formatage date:', error);
+      return '-';
+    }
+  };
+
+  const safeGetValue = (obj, key, defaultValue = '-') => {
+    try {
+      return obj?.[key] ?? defaultValue;
+    } catch (error) {
+      console.error(`Erreur accès propriété ${key}:`, error);
+      return defaultValue;
+    }
+  };
+
+  // 🔒 SECURISATION : Gestion d'erreur pour l'état global
+  if (companiesError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4 max-w-md text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500" />
+          <h2 className="text-xl font-semibold">Erreur de chargement</h2>
+          <p className="text-muted-foreground">
+            Impossible de charger la liste des entreprises.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => refetch()}
+              className="gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Réessayer
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setFilters({
+                ca_min: '',
+                effectif_min: '',
+                ville: 'all',
+                statut: 'all',
+                search: ''
+              })}
+            >
+              Réinitialiser filtres
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 🔒 SECURISATION : Colonnes du tableau avec vérifications strictes
   const columns = [
     {
       accessorKey: 'statut',
       header: 'Statut',
       width: '120px',
-      cell: ({ getValue }) => <StatusBadge status={getValue()} />,
+      cell: ({ getValue }) => {
+        const status = getValue();
+        return status ? <StatusBadge status={status} /> : <span className="text-muted-foreground">-</span>;
+      },
       sortable: true,
     },
     {
@@ -144,11 +236,11 @@ export default function Companies() {
       width: '100px',
       cell: ({ getValue }) => {
         const score = getValue();
-        if (!score) return '-';
+        if (!score || isNaN(score)) return <span className="text-muted-foreground">-</span>;
         return (
           <div className="flex items-center gap-1">
             <Star className="h-3 w-3 text-yellow-500" />
-            <span className="font-medium">{Math.round(score)}%</span>
+            <span className="font-medium">{Math.round(Number(score))}%</span>
           </div>
         );
       },
@@ -157,20 +249,26 @@ export default function Companies() {
     {
       accessorKey: 'nom_entreprise',
       header: 'Entreprise',
-      cell: ({ getValue, row }) => (
-        <div className="font-medium max-w-[250px] truncate" title={getValue()}>
-          {getValue()}
-        </div>
-      ),
+      cell: ({ getValue, row }) => {
+        const name = getValue();
+        return (
+          <div className="font-medium max-w-[250px] truncate" title={name || 'N/A'}>
+            {name || 'N/A'}
+          </div>
+        );
+      },
       sortable: true,
     },
     {
       accessorKey: 'siren',
       header: 'SIREN',
       width: '110px',
-      cell: ({ getValue }) => (
-        <span className="font-mono text-sm">{getValue() || "N/A"}</span>
-      ),
+      cell: ({ getValue }) => {
+        const siren = getValue();
+        return (
+          <span className="font-mono text-sm">{siren || "N/A"}</span>
+        );
+      },
       sortable: true,
     },
     {
@@ -180,7 +278,7 @@ export default function Companies() {
       cell: ({ getValue }) => (
         <div className="flex items-center gap-1">
           <Euro className="h-3 w-3 text-muted-foreground" />
-          <span className="font-medium">{formatCurrency(getValue())}</span>
+          <span className="font-medium">{safeFormatCurrency(getValue())}</span>
         </div>
       ),
       sortable: true,
@@ -191,7 +289,7 @@ export default function Companies() {
       width: '100px',
       cell: ({ getValue }) => {
         const effectif = getValue();
-        if (!effectif) return '-';
+        if (!effectif || isNaN(effectif)) return <span className="text-muted-foreground">-</span>;
         return (
           <div className="flex items-center gap-1">
             <Users className="h-3 w-3 text-muted-foreground" />
@@ -205,11 +303,14 @@ export default function Companies() {
       accessorKey: 'dirigeant_principal',
       header: 'Dirigeant',
       width: '200px',
-      cell: ({ getValue }) => (
-        <span className="max-w-[180px] truncate block" title={getValue()}>
-          {getValue() || '-'}
-        </span>
-      ),
+      cell: ({ getValue }) => {
+        const dirigeant = getValue();
+        return (
+          <span className="max-w-[180px] truncate block" title={dirigeant || '-'}>
+            {dirigeant || '-'}
+          </span>
+        );
+      },
       sortable: true,
     },
     {
@@ -218,7 +319,7 @@ export default function Companies() {
       width: '180px',
       cell: ({ getValue, row }) => {
         const email = getValue();
-        const phone = row.original?.telephone;
+        const phone = safeGetValue(row.original, 'telephone', null);
         
         return (
           <div className="space-y-1">
@@ -258,7 +359,7 @@ export default function Companies() {
       cell: ({ getValue }) => (
         <div className="flex items-center gap-1 text-sm">
           <Calendar className="h-3 w-3 text-muted-foreground" />
-          {formatDate(getValue())}
+          {safeFormatDate(getValue())}
         </div>
       ),
       sortable: true,
@@ -268,51 +369,64 @@ export default function Companies() {
       header: 'Actions',
       width: '120px',
       sortable: false,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedCompany(row.original?.siren);
-              setDetailsOpen(true);
-            }}
-            className="h-8 w-8 p-0"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              setCompanyToEdit(row.original);
-              setEditDialogOpen(true);
-            }}
-            className="h-8 w-8 p-0"
-          >
-            <Edit className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (window.confirm('Êtes-vous sûr de vouloir supprimer cette entreprise ?')) {
-                deleteMutation.mutate(row.original?.siren);
-              }
-            }}
-            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const rowData = row?.original;
+        if (!rowData) return null;
+
+        return (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                const siren = safeGetValue(rowData, 'siren');
+                if (siren && siren !== '-') {
+                  setSelectedCompany(siren);
+                  setDetailsOpen(true);
+                }
+              }}
+              className="h-8 w-8 p-0"
+              title="Voir les détails"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCompanyToEdit(rowData);
+                setEditDialogOpen(true);
+              }}
+              className="h-8 w-8 p-0"
+              title="Modifier"
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                const siren = safeGetValue(rowData, 'siren');
+                const name = safeGetValue(rowData, 'nom_entreprise', 'cette entreprise');
+                if (siren && siren !== '-' && window.confirm(`Êtes-vous sûr de vouloir supprimer ${name} ?`)) {
+                  deleteMutation.mutate(siren);
+                }
+              }}
+              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+              title="Supprimer"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
-  // Export function
+  // 🔒 SECURISATION : Export avec gestion d'erreur
   const handleExport = async () => {
     try {
       const response = await api.post('/companies/export', transformFilters(filters), {
@@ -328,17 +442,37 @@ export default function Companies() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Erreur lors de l\'export:', error);
+      alert('Erreur lors de l\'export des données');
     }
   };
 
   const handleRowClick = (row) => {
-    setSelectedCompany(row?.siren);
-    setDetailsOpen(true);
+    if (!row) return;
+    const siren = safeGetValue(row, 'siren');
+    if (siren && siren !== '-') {
+      setSelectedCompany(siren);
+      setDetailsOpen(true);
+    }
   };
 
-  const activeFiltersCount = Object.values(filters).filter(value => 
+  // 🔒 SECURISATION : Calcul sécurisé des filtres actifs
+  const activeFiltersCount = Object.values(filters || {}).filter(value => 
     value && value !== 'all' && value !== ''
   ).length;
+
+  // 🔒 SECURISATION : Stats sécurisées
+  const safeCompanies = Array.isArray(companies) ? companies : [];
+  const safeStats = {
+    total: safeCompanies.length,
+    withEmail: safeCompanies.filter(c => c?.email).length,
+    withPhone: safeCompanies.filter(c => c?.telephone).length,
+    avgScore: safeCompanies.length > 0 
+      ? Math.round(
+          safeCompanies.reduce((acc, c) => acc + (Number(c?.score_prospection) || 0), 0) / 
+          safeCompanies.filter(c => c?.score_prospection && !isNaN(c.score_prospection)).length
+        ) || 0
+      : 0
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -353,11 +487,11 @@ export default function Companies() {
             <p className="text-muted-foreground mt-2">
               Gérez et explorez votre base de données d'entreprises
             </p>
-            {companies.length > 0 && (
+            {safeStats.total > 0 && (
               <div className="flex items-center gap-4 mt-3">
                 <Badge variant="secondary" className="gap-1">
                   <Building2 className="h-3 w-3" />
-                  {companies.length} entreprise{companies.length > 1 ? 's' : ''}
+                  {safeStats.total} entreprise{safeStats.total > 1 ? 's' : ''}
                 </Badge>
                 {activeFiltersCount > 0 && (
                   <Badge variant="outline">
@@ -374,7 +508,7 @@ export default function Companies() {
             <Button
               variant="outline"
               onClick={handleExport}
-              disabled={companies.length === 0}
+              disabled={safeStats.total === 0}
               className="gap-2"
             >
               <Download className="h-4 w-4" />
@@ -398,7 +532,7 @@ export default function Companies() {
         {/* Data Table */}
         <div className="space-y-4">
           <DataTable
-            data={companies}
+            data={safeCompanies}
             columns={columns}
             searchable={false} // Search is handled by filters
             pageSize={25}
@@ -407,7 +541,7 @@ export default function Companies() {
             className="border rounded-lg"
           />
           
-          {!isLoading && companies.length === 0 && (
+          {!isLoading && safeStats.total === 0 && (
             <div className="text-center py-12 border rounded-lg bg-muted/20">
               <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">Aucune entreprise trouvée</h3>
@@ -436,14 +570,14 @@ export default function Companies() {
         </div>
 
         {/* Quick Stats */}
-        {companies.length > 0 && (
+        {safeStats.total > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Total entreprises</p>
                   <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                    {companies.length}
+                    {safeStats.total}
                   </p>
                 </div>
                 <Building2 className="h-8 w-8 text-blue-500" />
@@ -455,7 +589,7 @@ export default function Companies() {
                 <div>
                   <p className="text-sm font-medium text-green-600 dark:text-green-400">Avec email</p>
                   <p className="text-2xl font-bold text-green-900 dark:text-green-100">
-                    {companies.filter(c => c?.email).length}
+                    {safeStats.withEmail}
                   </p>
                 </div>
                 <Mail className="h-8 w-8 text-green-500" />
@@ -467,7 +601,7 @@ export default function Companies() {
                 <div>
                   <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Avec téléphone</p>
                   <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                    {companies.filter(c => c?.telephone).length}
+                    {safeStats.withPhone}
                   </p>
                 </div>
                 <Phone className="h-8 w-8 text-purple-500" />
@@ -479,10 +613,7 @@ export default function Companies() {
                 <div>
                   <p className="text-sm font-medium text-orange-600 dark:text-orange-400">Score moyen</p>
                   <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">
-                    {Math.round(
-                      companies.reduce((acc, c) => acc + (c?.score_prospection || 0), 0) / 
-                      companies.filter(c => c?.score_prospection).length
-                    ) || 0}%
+                    {safeStats.avgScore}%
                   </p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-orange-500" />
@@ -491,7 +622,7 @@ export default function Companies() {
           </div>
         )}
 
-        {/* Company Details Dialog */}
+        {/* 🔒 SECURISATION : Dialogs avec vérifications */}
         <CompanyDetailsDialog
           open={detailsOpen}
           onClose={() => {
@@ -501,13 +632,11 @@ export default function Companies() {
           siren={selectedCompany}
         />
 
-        {/* Add Company Dialog */}
         <AddCompanyDialog
           open={addDialogOpen}
           onClose={() => setAddDialogOpen(false)}
         />
 
-        {/* Edit Company Dialog */}
         <EditCompanyDialog
           open={editDialogOpen}
           onClose={() => {

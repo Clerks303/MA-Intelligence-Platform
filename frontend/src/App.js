@@ -3,155 +3,126 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
-// Simple components that should work
-import Login from './pages/LoginSimple';
-import Dashboard from './pages/DashboardSimple';
-import Companies from './pages/CompaniesSimple';
+// Modern Components
+import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { AppLayout } from './components/layout/AppLayout';
 
-// Loading component
-function LoadingSpinner() {
-  return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+// Modern Pages
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Companies from './pages/Companies';
+import Scraping from './pages/Scraping';
+
+// Hooks
+import { useAuth } from './contexts/AuthContext';
+
+// Styles
+import './styles/design-system.css';
+
+// Loading component with modern design
+const LoadingSpinner = () => (
+  <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+    <div className="text-center">
+      <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mb-4 mx-auto animate-pulse">
+        <span className="text-white font-bold text-lg">MI</span>
+      </div>
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent mx-auto"></div>
+      <p className="text-slate-600 dark:text-slate-400 mt-4 text-sm">
+        Chargement de M&A Intelligence...
+      </p>
     </div>
-  );
-}
+  </div>
+);
 
-// Query client with basic defaults
+// Query client with optimized defaults
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
+      retry: 2,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000,   // 10 minutes
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+    },
+    mutations: {
       retry: 1,
-      staleTime: 5 * 60 * 1000,
-      gcTime: 10 * 60 * 1000,
     },
   },
 });
 
-// Simple auth check - just check if token exists
-function useSimpleAuth() {
-  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    setIsAuthenticated(!!token);
-    setLoading(false);
-  }, []);
-
-  const login = (token) => {
-    localStorage.setItem('auth_token', token);
-    setIsAuthenticated(true);
-  };
-
-  const logout = () => {
-    localStorage.removeItem('auth_token');
-    setIsAuthenticated(false);
-  };
-
-  return { isAuthenticated, loading, login, logout };
-}
-
 // Protected Route component
-function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useSimpleAuth();
+const ProtectedRoute = ({ children }) => {
+  const { user, loading } = useAuth();
   
   if (loading) {
     return <LoadingSpinner />;
   }
   
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
-}
+  return user ? <>{children}</> : <Navigate to="/login" replace />;
+};
 
-// Simple Layout component
-function SimpleLayout({ children }) {
-  const { logout } = useSimpleAuth();
+// Public Route component (redirects if authenticated)
+const PublicRoute = ({ children }) => {
+  const { user, loading } = useAuth();
   
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+  
+  return user ? <Navigate to="/dashboard" replace /> : <>{children}</>;
+};
+
+// Main App Router
+const AppRouter = () => {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <h1 className="text-xl font-semibold text-gray-900">M&A Intelligence</h1>
-              <div className="flex space-x-4">
-                <a href="/dashboard" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">
-                  Dashboard
-                </a>
-                <a href="/companies" className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium">
-                  Entreprises
-                </a>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">
-                Connecté
-              </span>
-              <button
-                onClick={logout}
-                className="bg-red-600 text-white px-4 py-2 rounded-md text-sm hover:bg-red-700"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {children}
-      </main>
-    </div>
+    <Router>
+      <Routes>
+        {/* Public routes */}
+        <Route 
+          path="/login" 
+          element={
+            <PublicRoute>
+              <Login />
+            </PublicRoute>
+          } 
+        />
+        
+        {/* Protected routes with modern layout */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          {/* Nested routes within AppLayout */}
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="companies" element={<Companies />} />
+          <Route path="scraping" element={<Scraping />} />
+        </Route>
+        
+        {/* Catch all route */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Router>
   );
-}
+};
 
 // Main App component
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<Login />} />
-          
-          {/* Protected routes */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <SimpleLayout>
-                  <Dashboard />
-                </SimpleLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <SimpleLayout>
-                  <Dashboard />
-                </SimpleLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/companies"
-            element={
-              <ProtectedRoute>
-                <SimpleLayout>
-                  <Companies />
-                </SimpleLayout>
-              </ProtectedRoute>
-            }
-          />
-          
-          {/* Catch all route */}
-          <Route path="*" element={<Navigate to="/dashboard" />} />
-        </Routes>
-      </Router>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppRouter />
+        </AuthProvider>
+      </ThemeProvider>
       
-      {/* React Query devtools */}
+      {/* React Query devtools (development only) */}
       {process.env.NODE_ENV === 'development' && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}

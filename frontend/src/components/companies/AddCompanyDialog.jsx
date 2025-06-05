@@ -41,55 +41,53 @@ export function AddCompanyDialog({ open, onClose }) {
   });
   const [errors, setErrors] = useState({});
 
-  const createMutation = useMutation(
-    (companyData) => api.post('/companies/', companyData),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('companies');
-        queryClient.invalidateQueries('stats');
-        onClose();
-        resetForm();
-      },
-      onError: (error) => {
-        console.error('Error creating company:', error);
-        
-        if (error.response?.status === 400) {
-          setErrors({ general: 'Ce SIREN existe déjà dans la base de données.' });
-        } else if (error.response?.status === 422) {
-          // Handle validation errors (422)
-          const detail = error.response?.data?.detail;
-          if (Array.isArray(detail)) {
-            // Multiple field errors
-            const fieldErrors = {};
-            const generalErrors = [];
-            
-            detail.forEach(err => {
-              if (err.loc && err.loc.length > 0) {
-                const field = err.loc[err.loc.length - 1];
-                fieldErrors[field] = err.msg;
-              } else {
-                generalErrors.push(err.msg);
-              }
-            });
-            
-            setErrors({
-              ...fieldErrors,
-              general: generalErrors.length > 0 ? generalErrors.join(', ') : 'Erreurs de validation détectées.'
-            });
-          } else if (typeof detail === 'string') {
-            setErrors({ general: detail });
-          } else {
-            setErrors({ general: 'Erreurs de validation. Vérifiez vos données.' });
-          }
+  const createMutation = useMutation({
+    mutationFn: (companyData) => api.post('/companies/', companyData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      onClose();
+      resetForm();
+    },
+    onError: (error) => {
+      console.error('Error creating company:', error);
+      
+      if (error.response?.status === 400) {
+        setErrors({ general: 'Ce SIREN existe déjà dans la base de données.' });
+      } else if (error.response?.status === 422) {
+        // Handle validation errors (422)
+        const detail = error.response?.data?.detail;
+        if (Array.isArray(detail)) {
+          // Multiple field errors
+          const fieldErrors = {};
+          const generalErrors = [];
+          
+          detail.forEach(err => {
+            if (err.loc && err.loc.length > 0) {
+              const field = err.loc[err.loc.length - 1];
+              fieldErrors[field] = err.msg;
+            } else {
+              generalErrors.push(err.msg);
+            }
+          });
+          
+          setErrors({
+            ...fieldErrors,
+            general: generalErrors.length > 0 ? generalErrors.join(', ') : 'Erreurs de validation détectées.'
+          });
+        } else if (typeof detail === 'string') {
+          setErrors({ general: detail });
         } else {
-          // Handle other errors
-          const detail = error.response?.data?.detail;
-          const message = typeof detail === 'string' ? detail : 'Erreur lors de la création.';
-          setErrors({ general: message });
+          setErrors({ general: 'Erreurs de validation. Vérifiez vos données.' });
         }
+      } else {
+        // Handle other errors
+        const detail = error.response?.data?.detail;
+        const message = typeof detail === 'string' ? detail : 'Erreur lors de la création.';
+        setErrors({ general: message });
       }
     }
-  );
+  });
 
   const resetForm = () => {
     setFormData({

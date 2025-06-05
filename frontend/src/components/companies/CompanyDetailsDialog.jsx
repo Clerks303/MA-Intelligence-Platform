@@ -5,7 +5,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogBody,
   DialogFooter,
 } from '../ui/dialog';
 import { Button } from '../ui/button';
@@ -33,11 +32,11 @@ import { cn } from '../../lib/utils';
 export function CompanyDetailsDialog({ open, onClose, siren }) {
   const [activeTab, setActiveTab] = useState('general');
   
-  const { data: company, isLoading } = useQuery(
-    ['company', siren],
-    () => api.get(`/companies/${siren}`).then(res => res.data),
-    { enabled: !!siren && open }
-  );
+  const { data: company, isLoading } = useQuery({
+    queryKey: ['company', siren],
+    queryFn: () => api.get(`/companies/${siren}`).then(res => res.data),
+    enabled: !!siren && open
+  });
 
   const formatCurrency = (amount) => {
     if (!amount) return 'N/A';
@@ -78,9 +77,9 @@ export function CompanyDetailsDialog({ open, onClose, siren }) {
           <DialogHeader onClose={onClose}>
             <DialogTitle>Erreur</DialogTitle>
           </DialogHeader>
-          <DialogBody>
+          <DialogContent>
             <p className="text-muted-foreground">Impossible de charger les détails de l'entreprise.</p>
-          </DialogBody>
+          </DialogContent>
           <DialogFooter>
             <Button onClick={onClose}>Fermer</Button>
           </DialogFooter>
@@ -112,7 +111,7 @@ export function CompanyDetailsDialog({ open, onClose, siren }) {
           </div>
         </DialogHeader>
 
-        <DialogBody>
+        <DialogContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="general">Général</TabsTrigger>
@@ -359,7 +358,7 @@ export function CompanyDetailsDialog({ open, onClose, siren }) {
               )}
             </TabsContent>
           </Tabs>
-        </DialogBody>
+        </DialogContent>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

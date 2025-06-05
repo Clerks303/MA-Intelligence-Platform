@@ -64,19 +64,17 @@ const MetricsChart = ({
   };
 
   // Requête métriques
-  const { data: metricsData, isLoading, refetch } = useQuery(
-    ['metrics-chart', metric, selectedTimeWindow],
-    () => api.get('/monitoring/metrics', {
+  const { data: metricsData, isLoading, refetch } = useQuery({
+    queryKey: ['metrics-chart', metric, selectedTimeWindow],
+    queryFn: () => api.get('/monitoring/metrics', {
       params: {
         window_minutes: timeWindowMap[selectedTimeWindow],
         category: getMetricCategory(metric)
       }
     }).then(res => res.data),
-    {
-      refetchInterval: 30000, // 30 secondes
-      keepPreviousData: true
-    }
-  );
+    refetchInterval: 30000, // 30 secondes
+    keepPreviousData: true
+  });
 
   // Fonction pour déterminer la catégorie de métrique
   function getMetricCategory(metricName) {

@@ -31,46 +31,38 @@ export default function Scraping() {
   });
 
   // Upload file mutation
-  const uploadMutation = useMutation(
-    async (file) => {
+  const uploadMutation = useMutation({
+    mutationFn: async (file) => {
       const formData = new FormData();
       formData.append('file', file);
       return api.post('/companies/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['companies']);
-        queryClient.invalidateQueries(['stats']);
-      },
-      onError: (error) => {
-        console.error('Upload error:', error);
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    },
+    onError: (error) => {
+      console.error('Upload error:', error);
     }
-  );
+  });
 
   // Start scraping mutations
-  const pappersMutation = useMutation(
-    () => api.post('/scraping/pappers'),
-    {
-      onSuccess: () => queryClient.invalidateQueries('stats')
-    }
-  );
+  const pappersMutation = useMutation({
+    mutationFn: () => api.post('/scraping/pappers'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stats'] })
+  });
 
-  const societeMutation = useMutation(
-    () => api.post('/scraping/societe'),
-    {
-      onSuccess: () => queryClient.invalidateQueries('stats')
-    }
-  );
+  const societeMutation = useMutation({
+    mutationFn: () => api.post('/scraping/societe'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stats'] })
+  });
 
-  const infogreffeMutation = useMutation(
-    () => api.post('/scraping/infogreffe'),
-    {
-      onSuccess: () => queryClient.invalidateQueries('stats')
-    }
-  );
+  const infogreffeMutation = useMutation({
+    mutationFn: () => api.post('/scraping/infogreffe'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stats'] })
+  });
 
   // Handle file drop
   const handleDrop = (e) => {

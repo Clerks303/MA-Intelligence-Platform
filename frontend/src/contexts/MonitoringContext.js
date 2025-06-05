@@ -240,61 +240,53 @@ export const MonitoringProvider = ({ children }) => {
   };
 
   // Queries avec React Query pour cache intelligent
-  const overviewQuery = useQuery(
-    QUERY_KEYS.overview,
-    monitoringApi.getOverview,
-    {
-      enabled: state.realTimeEnabled,
-      refetchInterval: state.realTimeEnabled ? state.refreshInterval : false,
-      onSuccess: (data) => {
-        dispatch({ type: MONITORING_ACTIONS.SET_OVERVIEW, payload: data });
-        
-        // Vérifier nouvelles alertes critiques
-        if (data.critical_issues?.immediate_attention_required) {
-          checkForNewCriticalAlerts(data);
-        }
-      },
-      onError: (error) => {
-        dispatch({ type: MONITORING_ACTIONS.SET_ERROR, payload: error.message });
+  const overviewQuery = useQuery({
+    queryKey: [QUERY_KEYS.overview],
+    queryFn: monitoringApi.getOverview,
+    enabled: state.realTimeEnabled,
+    refetchInterval: state.realTimeEnabled ? state.refreshInterval : false,
+    onSuccess: (data) => {
+      dispatch({ type: MONITORING_ACTIONS.SET_OVERVIEW, payload: data });
+      
+      // Vérifier nouvelles alertes critiques
+      if (data.critical_issues?.immediate_attention_required) {
+        checkForNewCriticalAlerts(data);
       }
+    },
+    onError: (error) => {
+      dispatch({ type: MONITORING_ACTIONS.SET_ERROR, payload: error.message });
     }
-  );
+  });
 
-  const alertsQuery = useQuery(
-    [QUERY_KEYS.alerts, state.alertFilters],
-    () => monitoringApi.getAlerts(state.alertFilters),
-    {
-      enabled: state.realTimeEnabled,
-      refetchInterval: state.realTimeEnabled ? state.refreshInterval : false,
-      onSuccess: (data) => {
-        dispatch({ type: MONITORING_ACTIONS.SET_ALERTS, payload: data });
-      }
+  const alertsQuery = useQuery({
+    queryKey: [QUERY_KEYS.alerts, state.alertFilters],
+    queryFn: () => monitoringApi.getAlerts(state.alertFilters),
+    enabled: state.realTimeEnabled,
+    refetchInterval: state.realTimeEnabled ? state.refreshInterval : false,
+    onSuccess: (data) => {
+      dispatch({ type: MONITORING_ACTIONS.SET_ALERTS, payload: data });
     }
-  );
+  });
 
-  const metricsQuery = useQuery(
-    QUERY_KEYS.metrics,
-    () => monitoringApi.getMetrics(5), // 5 minutes window
-    {
-      enabled: state.realTimeEnabled,
-      refetchInterval: state.realTimeEnabled ? state.refreshInterval * 2 : false, // Moins fréquent
-      onSuccess: (data) => {
-        dispatch({ type: MONITORING_ACTIONS.SET_METRICS, payload: data });
-      }
+  const metricsQuery = useQuery({
+    queryKey: [QUERY_KEYS.metrics],
+    queryFn: () => monitoringApi.getMetrics(5), // 5 minutes window
+    enabled: state.realTimeEnabled,
+    refetchInterval: state.realTimeEnabled ? state.refreshInterval * 2 : false, // Moins fréquent
+    onSuccess: (data) => {
+      dispatch({ type: MONITORING_ACTIONS.SET_METRICS, payload: data });
     }
-  );
+  });
 
-  const healthQuery = useQuery(
-    QUERY_KEYS.health,
-    () => monitoringApi.getHealth(false),
-    {
-      enabled: state.realTimeEnabled,
-      refetchInterval: state.realTimeEnabled ? state.refreshInterval : false,
-      onSuccess: (data) => {
-        dispatch({ type: MONITORING_ACTIONS.SET_HEALTH, payload: data });
-      }
+  const healthQuery = useQuery({
+    queryKey: [QUERY_KEYS.health],
+    queryFn: () => monitoringApi.getHealth(false),
+    enabled: state.realTimeEnabled,
+    refetchInterval: state.realTimeEnabled ? state.refreshInterval : false,
+    onSuccess: (data) => {
+      dispatch({ type: MONITORING_ACTIONS.SET_HEALTH, payload: data });
     }
-  );
+  });
 
   // Fonctions d'action
   const actions = {
